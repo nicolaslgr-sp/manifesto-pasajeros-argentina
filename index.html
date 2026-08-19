@@ -264,7 +264,7 @@
         <h2 class="text-sm font-semibold text-navy-800">Saídas</h2>
         <button type="button" id="btn-print" class="w-full rounded-xl bg-navy-800 text-white py-3 font-semibold">Gerar Documento para Impressão</button>
         <button type="button" id="btn-pdf" class="w-full rounded-xl bg-white border border-navy-700 text-navy-800 py-3 font-semibold">Gerar PDF Oficial</button>
-        <button type="button" id="btn-xlsx" class="w-full rounded-xl bg-white border border-slate-300 py-3 font-semibold">Exportar Excel (.xlsx)</button>
+        <button type="button" id="btn-xlsx" class="w-full rounded-xl bg-white border border-slate-300 py-3 font-semibold">Exportar Excel (.xls)</button>
         <p class="text-[11px] text-slate-500">No iPhone: Impressão abre o diálogo do Safari (AirPrint ou “Salvar em PDF”). Os arquivos PDF/Excel são baixados localmente, sem servidor.</p>
       </section>
     </main>
@@ -334,6 +334,8 @@
 
   <!-- Template .xls em base64 (fallback se fetch falhar — ex.: GitHub Pages só com index.html) -->
   <script src="template/manifesto-template.b64.js"></script>
+  <!-- Patch BIFF8 in-place: preserva layout/formatos do .xls original -->
+  <script src="scripts/biff-patch-export.js"></script>
 
   <script>
   /**
@@ -1023,22 +1025,6 @@
       return (i + 1) + '.';
     }
 
-    function wsSet(ws, r, c, v) {
-      var addr = XLSX.utils.encode_cell({ r: r, c: c });
-      if (v === '' || v == null) return;
-      ws[addr] = { t: 's', v: String(v) };
-    }
-
-    function wsClearPax(ws, startRow, nRows) {
-      var r, c, addr;
-      for (r = startRow; r < startRow + nRows; r++) {
-        for (c = 1; c <= 6; c++) {
-          addr = XLSX.utils.encode_cell({ r: r, c: c });
-          if (ws[addr]) ws[addr].v = '';
-        }
-      }
-    }
-
     function loadTemplateBuffer() {
       if (typeof MANIFESTO_TEMPLATE_XLS_B64 === 'string') {
         var bin = atob(MANIFESTO_TEMPLATE_XLS_B64);
@@ -1052,76 +1038,91 @@
       });
     }
 
-    /* Preenche bloco ENTRADA (R0–28) ou SALIDA (R34–62) preservando merges do template */
-    function fillExcelBlock(ws, kind, paxSlice) {
+    function setAssign(assignments, row, col, val) {
+      if (val === '' || val == null) return;
+      assignments[row + ',' + col] = String(val);
+    }
+
+    /* Mapa células 0-based → valores para patch BIFF8 no template original */
+    function buildExcelAssignments() {
       var h = state.header;
-      var sal = kind === 'SALIDA';
-      var R = sal ? {
-        hoja: 35, stamp: 35, nro: 37, del: 38, placa: 38, medio: 39, nacion: 39,
-        fecha: 40, por: 40, paxcount: 40, pasoL: 41, pasoV: 41, trip: 41,
-        consignado: 42, guia: 46, tripul: 46, paxStart: 52, paxRows: PAX_ROWS_SALIDA
-      } : {
-        hoja: 1, stamp: 1, nro: 3, del: 4, placa: 4, medio: 5, nacion: 5,
-        fecha: 6, por: 6, paxcount: 6, pasoL: 7, trip: 7,
-        consignado: 8, guia: 12, tripul: 12, paxStart: 17, paxRows: PAX_ROWS_ENTRADA
-      };
-      var hn = h.hoja || 1, ht = h.hojaTotal || 1;
-      var fecha = fmtDateBR(h.fecha);
-      var paxN = filledPax().length;
+      var pax = filledPax();
+      var a = {};
       var tripN = crewCount();
+      var fecha = fmtDateBR(h.fecha);
+      var hn = h.hoja || 1, ht = h.hojaTotal || 1;
 
-      wsSet(ws, R.hoja, 0, 'HOJA Nº: ' + hn + '         / ' + ht);
-      wsSet(ws, R.stamp, 5, kind);
-      wsSet(ws, R.nro, 5, 'Nº DE MANIFIESTO: ' + (h.nro || ''));
-      wsSet(ws, R.del, 0, 'DEL: ' + (h.del || ''));
-      wsSet(ws, R.placa, 3, 'PLACA : ' + (h.placa || '').toUpperCase());
-      if (sal) {
-        wsSet(ws, R.medio, 0, 'Medio de Transporte: ' + (h.medio || ''));
-        wsSet(ws, R.nacion, 3, 'Nación:  ' + (h.nacion || ''));
-        wsSet(ws, R.fecha, 0, 'Con FECHA: ' + fecha);
-        wsSet(ws, R.paxcount, 4, 'PASSAGEIROS:' + paxN);
-        wsSet(ws, R.pasoV, 3, h.paso || '');
-      } else {
-        wsSet(ws, R.medio, 0, 'Medio de Transporte:' + (h.medio || ''));
-        wsSet(ws, R.nacion, 3, 'Nación: ' + (h.nacion || ''));
-        wsSet(ws, R.fecha, 0, 'Con FECHA ' + fecha);
-        wsSet(ws, R.paxcount, 4, 'PASSAGEIROS: ' + paxN);
+      function block(R, sal, slice) {
+        setAssign(a, R.hoja, 0, 'HOJA Nº: ' + hn + '         / ' + ht);
+        setAssign(a, R.nro, 5, 'Nº DE MANIFIESTO: ' + (h.nro || ''));
+        setAssign(a, R.del, 0, 'DEL: ' + (h.del || ''));
+        setAssign(a, R.placa, 3, 'PLACA : ' + (h.placa || '').toUpperCase());
+        if (sal) {
+          setAssign(a, R.medio, 0, 'Medio de Transporte: ' + (h.medio || ''));
+          setAssign(a, R.nacion, 3, 'Nación:  ' + (h.nacion || ''));
+          setAssign(a, R.fecha, 0, 'Con FECHA: ' + fecha);
+          setAssign(a, R.paxcount, 4, 'PASSAGEIROS:' + pax.length);
+          setAssign(a, R.pasoV, 3, h.paso || '');
+        } else {
+          setAssign(a, R.medio, 0, 'Medio de Transporte:' + (h.medio || ''));
+          setAssign(a, R.nacion, 3, 'Nación: ' + (h.nacion || ''));
+          setAssign(a, R.fecha, 0, 'Con FECHA ' + fecha);
+          setAssign(a, R.paxcount, 4, 'PASSAGEIROS: ' + pax.length);
+        }
+        setAssign(a, R.por, 2, 'Por: ' + (h.por || ''));
+        setAssign(a, R.pasoL, 2, 'Paso fronterizo');
+        setAssign(a, R.trip, 4, 'TRIPULANTE: ' + tripN);
+        setAssign(a, R.consignado, 0, 'CONSIGNADO A: ' + (h.consignado || ''));
+        setAssign(a, R.guia, 0, guiaDocLine());
+        setAssign(a, R.tripul, 2, tripDocLine());
+        var i, p, row;
+        for (i = 0; i < R.paxRows; i++) {
+          row = R.paxStart + i;
+          p = slice[i];
+          setAssign(a, row, 0, paxNumLabel(sal ? 'SALIDA' : 'ENTRADA', i));
+          if (!p) continue;
+          setAssign(a, row, 1, p.apellidoNombre || '');
+          setAssign(a, row, 2, fmtDateBR(p.nacimiento));
+          setAssign(a, row, 3, p.nacionalidad || '');
+          setAssign(a, row, 4, p.documento || '');
+          setAssign(a, row, 5, p.visa !== 'con' ? 'X' : '');
+          setAssign(a, row, 6, p.visa === 'con' ? 'X' : '');
+        }
       }
-      wsSet(ws, R.por, 2, 'Por: ' + (h.por || ''));
-      wsSet(ws, R.pasoL, 2, 'Paso fronterizo');
-      wsSet(ws, R.trip, 4, 'TRIPULANTE: ' + tripN);
-      wsSet(ws, R.consignado, 0, 'CONSIGNADO A: ' + (h.consignado || ''));
-      wsSet(ws, R.guia, 0, guiaDocLine());
-      wsSet(ws, R.tripul, 2, tripDocLine());
 
-      wsClearPax(ws, R.paxStart, R.paxRows);
-      var i, p, row;
-      for (i = 0; i < R.paxRows; i++) {
-        row = R.paxStart + i;
-        p = paxSlice[i];
-        wsSet(ws, row, 0, paxNumLabel(kind, i));
-        if (!p) continue;
-        wsSet(ws, row, 1, p.apellidoNombre || '');
-        wsSet(ws, row, 2, fmtDateBR(p.nacimiento));
-        wsSet(ws, row, 3, p.nacionalidad || '');
-        wsSet(ws, row, 4, p.documento || '');
-        wsSet(ws, row, 5, p.visa !== 'con' ? 'X' : '');
-        wsSet(ws, row, 6, p.visa === 'con' ? 'X' : '');
-      }
+      block({
+        hoja: 1, nro: 3, del: 4, placa: 4, medio: 5, nacion: 5, fecha: 6, por: 6, paxcount: 6,
+        pasoL: 7, trip: 7, consignado: 8, guia: 12, tripul: 12, paxStart: 17, paxRows: PAX_ROWS_ENTRADA
+      }, false, pax.slice(0, PAX_ROWS_ENTRADA));
+
+      block({
+        hoja: 35, nro: 37, del: 38, placa: 38, medio: 39, nacion: 39, fecha: 40, por: 40, paxcount: 40,
+        pasoL: 41, pasoV: 41, trip: 41, consignado: 42, guia: 46, tripul: 46, paxStart: 52, paxRows: PAX_ROWS_SALIDA
+      }, true, pax.slice(0, PAX_ROWS_SALIDA));
+
+      return a;
+    }
+
+    function downloadBlob(data, filename, mime) {
+      var blob = new Blob([data], { type: mime || 'application/vnd.ms-excel' });
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
     }
 
     function generateExcel() {
-      if (typeof XLSX === 'undefined') {
-        alert('Biblioteca SheetJS não carregou.');
+      if (typeof BiffPatchExport === 'undefined') {
+        alert('Módulo de exportação Excel não carregou.');
         return;
       }
       loadTemplateBuffer().then(function (buf) {
-        var wb = XLSX.read(buf, { type: 'array', cellStyles: true });
-        var ws = wb.Sheets[wb.SheetNames[0]];
-        var pax = filledPax();
-        fillExcelBlock(ws, 'ENTRADA', pax.slice(0, PAX_ROWS_ENTRADA));
-        fillExcelBlock(ws, 'SALIDA', pax.slice(0, PAX_ROWS_SALIDA));
-        XLSX.writeFile(wb, 'LISTA DE PASSAGEIROS PRA ARGENTINA.xls');
+        var out = BiffPatchExport.patchTemplateArrayBuffer(new Uint8Array(buf), buildExcelAssignments());
+        downloadBlob(out, 'LISTA DE PASSAGEIROS PRA ARGENTINA.xls');
       }).catch(function (e) {
         alert('Erro ao gerar Excel: ' + (e.message || e));
       });
