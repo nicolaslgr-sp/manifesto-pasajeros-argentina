@@ -49,6 +49,15 @@
       border-radius: 10px;
       pointer-events: none;
     }
+    /* iOS Safari: display:none on <input type=file> often swallows the tap.
+       Keep 1px + opacity 0 and open via input.click() on a user gesture. */
+    .file-visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      overflow: hidden;
+    }
   </style>
 </head>
 <body class="text-slate-800">
@@ -191,11 +200,9 @@
         <p id="scan-status" class="text-xs text-white/80 min-h-[1.25rem]">Aguardando câmera…</p>
         <div class="grid grid-cols-2 gap-2">
           <button type="button" id="scan-capture" class="rounded-xl bg-white/10 font-semibold py-3">Capturar agora</button>
-          <label class="rounded-xl bg-white/10 font-semibold py-3 text-center">
-            Galeria / Foto
-            <input id="scan-file" type="file" accept="image/*" capture="environment" class="hidden" />
-          </label>
+          <button type="button" id="scan-gallery" class="rounded-xl bg-white/10 font-semibold py-3">Galeria / Foto</button>
         </div>
+        <input id="scan-file" type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/*" class="file-visually-hidden" tabindex="-1" />
         <details class="text-xs">
           <summary class="cursor-pointer text-white/70">Digitar MRZ manualmente</summary>
           <textarea id="scan-manual" rows="3" class="mt-2 w-full rounded-xl text-slate-900 px-3 py-2 font-mono text-[12px]" placeholder="P<BRA...&#10;AB1234567BRA..."></textarea>
@@ -1343,7 +1350,7 @@
         if (v.readyState >= 2) startAutoScan();
         else setScanStatus('Abrindo câmera… a leitura começa sozinha em instantes.');
       }).catch(function () {
-        setScanStatus('Permissão negada. Use “Galeria / Foto” para abrir a câmera do iPhone.');
+        setScanStatus('Permissão negada. Use “Galeria / Foto” para escolher a foto completa do passaporte.');
       });
     }
 
@@ -1451,10 +1458,11 @@
       ctx.putImageData(img, 0, 0);
     }
 
-    function makeMrzBand(frame, y0, y1, mode) {
+    function makeMrzBand(frame, y0, y1, mode, wide) {
       var w = frame.width, h = frame.height;
-      var sx = Math.floor(w * 0.07);
-      var sw = Math.floor(w * 0.86);
+      var side = wide ? 0.02 : 0.07;
+      var sx = Math.floor(w * side);
+      var sw = Math.floor(w * (1 - side * 2));
       var sy = Math.floor(h * y0);
       var sh = Math.max(12, Math.floor(h * (y1 - y0)));
       var targetW = 2400;
@@ -1597,9 +1605,19 @@
       { y0: 0.73, y1: 0.93, mode: 'otsu', psms: ['6'] },
       { y0: 0.70, y1: 0.96, mode: 'contrast', psms: ['11'] }
     ];
+    /* Galeria: foto da página inteira — faixas mais largas que o recorte da câmera ao vivo. */
+    var MRZ_JOBS_GALLERY = [
+      { y0: 0.55, y1: 0.99, mode: 'sharp', psms: ['6', '13'], wide: true },
+      { y0: 0.68, y1: 0.99, mode: 'contrast', psms: ['6', '11'], wide: true },
+      { y0: 0.73, y1: 0.93, mode: 'sharp', psms: ['6', '13'], wide: true },
+      { y0: 0.70, y1: 0.96, mode: 'otsu', psms: ['6', '7'], wide: true },
+      { y0: 0.62, y1: 1.0, mode: 'invert', psms: ['7', '13'], wide: true },
+      { y0: 0.73, y1: 0.93, mode: 'adaptive', psms: ['6'], wide: true },
+      { y0: 0.50, y1: 1.0, mode: 'stretch_otsu', psms: ['13'], wide: true }
+    ];
 
-    function readMrzPipeline(frame, quick) {
-      var jobs = quick ? MRZ_JOBS_QUICK : MRZ_JOBS_FULL;
+    function readMrzPipeline(frame, quick, fullPage) {
+      var jobs = quick ? MRZ_JOBS_QUICK : (fullPage ? MRZ_JOBS_GALLERY : MRZ_JOBS_FULL);
       var pool = [];
 
       function runJob(jobIdx, psmIdx) {
@@ -1614,7 +1632,7 @@
         if (!quick) {
           setScanStatus('Lendo MRZ (' + (jobIdx + 1) + '/' + jobs.length + ', modo ' + job.mode + ')…');
         }
-        var band = makeMrzBand(frame, job.y0, job.y1, job.mode);
+        var band = makeMrzBand(frame, job.y0, job.y1, job.mode, job.wide);
         return ocrWithPsm(band, job.psms[psmIdx], MRZ_CHARS).then(function (text) {
           considerText(text, pool);
           return runJob(jobIdx, psmIdx + 1);
@@ -1628,32 +1646,33 @@
       });
     }
 
-    function readMrzFromBottom(frame) {
-      return readMrzPipeline(frame, false);
+    function readMrzFromBottom(frame, fullPage) {
+      return readMrzPipeline(frame, false, fullPage);
     }
 
     function readMrzQuick(frame) {
       return readMrzPipeline(frame, true);
     }
 
-    function readVizPage(frame) {
+    function readVizPage(frame, fullPage) {
       var vizChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 /.-:';
       setScanStatus('Agora conferindo nome, data e número no restante da página…');
-      var band = makeBand(frame, 0.02, 0.74, 'contrast');
+      var y1 = fullPage ? 0.82 : 0.74;
+      var band = makeBand(frame, 0.02, y1, 'contrast');
       return ocrWithPsm(band, '4', vizChars).then(function (text) {
         if (text && text.replace(/\s/g, '').length > 20) return text;
         setScanStatus('A página veio fraca; tentando outro contraste…');
-        var band2 = makeBand(frame, 0.02, 0.78, 'otsu');
+        var band2 = makeBand(frame, 0.02, fullPage ? 0.86 : 0.78, 'otsu');
         return ocrWithPsm(band2, '6', vizChars);
       });
     }
 
-    function readPassportCarefully(frame) {
+    function readPassportCarefully(frame, fullPage) {
       return ensureWorker().then(function () {
-        return readMrzFromBottom(frame);
+        return readMrzFromBottom(frame, fullPage);
       }).then(function (mrz) {
         if (!mrz || mrz.score < 40) return null;
-        return readVizPage(frame).then(function (vizText) {
+        return readVizPage(frame, fullPage).then(function (vizText) {
           var viz = parseVIZ(vizText || '', mrz);
           return mergeMrzAndViz(mrz, viz);
         }).catch(function () {
@@ -1696,12 +1715,13 @@
       closeScanner();
     }
 
-    function processSource(source) {
+    function processSource(source, opts) {
       if (ocrBusy) return;
+      var fullPage = !!(opts && opts.fullPage);
       stopAutoScan();
       hideConfirm();
       setScanBusy(true);
-      setScanStatus('Lendo passaporte…');
+      setScanStatus(fullPage ? 'Lendo foto completa do passaporte…' : 'Lendo passaporte…');
       var frame = grabFrame(source);
       if (!frame) {
         setScanBusy(false);
@@ -1709,7 +1729,7 @@
         startAutoScan();
         return;
       }
-      readPassportCarefully(frame).then(function (result) {
+      readPassportCarefully(frame, fullPage).then(function (result) {
         setScanBusy(false);
         finishScanResult(result);
       }).catch(function (err) {
@@ -1796,12 +1816,21 @@
         stopAutoScan();
         processSource(v);
       };
+      $('scan-gallery').onclick = function () {
+        var input = $('scan-file');
+        if (!input) return;
+        try { input.value = ''; } catch (e) {}
+        setScanStatus('Escolha a foto completa do passaporte…');
+        input.click();
+      };
       $('scan-file').onchange = function (ev) {
         var file = ev.target.files && ev.target.files[0];
         ev.target.value = '';
         if (!file) return;
-        setScanStatus('Abrindo foto…');
-        readFileToImage(file).then(processSource).catch(function () {
+        setScanStatus('Abrindo foto completa…');
+        readFileToImage(file).then(function (img) {
+          processSource(img, { fullPage: true });
+        }).catch(function () {
           setScanStatus('Não foi possível abrir a imagem.');
         });
       };
