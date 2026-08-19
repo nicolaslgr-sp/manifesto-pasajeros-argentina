@@ -1,0 +1,1709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#1e3a5f" />
+  <title>Manifiesto de Pasajeros — Argentina</title>
+
+  <!-- Tailwind CSS (interface mobile). O documento oficial usa CSS próprio abaixo. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: { 50: '#eef3f8', 700: '#1e3a5f', 800: '#16304d', 900: '#0f2340' }
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- PDF, Excel e captura visual (CDNs pedidas) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- OCR da zona MRZ do passaporte -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <style>
+    :root { --navy: #1e3a5f; --line: #111; }
+    html, body { background: #e8eef4; }
+    /* iOS: evita zoom ao focar inputs */
+    input, select, textarea, button { font-size: 16px; }
+    .safe-bottom { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
+
+    /* ========== DOCUMENTO OFICIAL (tela de preview + impressão A4) ========== */
+    .official-sheet {
+      width: 210mm;
+      min-height: 297mm;
+      background: #fff;
+      color: #000;
+      font-family: Arial, Helvetica, sans-serif;
+      box-sizing: border-box;
+      padding: 8mm 8mm 10mm;
+      page-break-after: always;
+    }
+    .official-sheet:last-child { page-break-after: auto; }
+
+    .of-box { border: 1.4px solid #000; }
+    .of-inner { border: 0.6px solid #000; }
+    .of-tiny { font-size: 8px; line-height: 1.15; }
+    .of-sm { font-size: 9px; line-height: 1.2; }
+    .of-md { font-size: 11px; }
+    .of-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+    .of-stamp {
+      font-family: "Arial Black", Arial, sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1;
+    }
+    .of-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .of-table th, .of-table td {
+      border: 1px solid #000;
+      padding: 2px 4px;
+      vertical-align: middle;
+    }
+    .of-table th {
+      font-size: 8px;
+      font-weight: 700;
+      text-align: center;
+      background: #f3f3f3;
+    }
+    .of-table td { font-size: 10px; height: 28px; }
+    .of-sign {
+      height: 58px;
+      border: 1px solid #000;
+      font-size: 8px;
+      padding: 4px;
+    }
+
+    @page { size: A4 portrait; margin: 0; }
+
+    @media print {
+      html, body {
+        background: #fff !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .no-print { display: none !important; }
+      #print-root { display: block !important; }
+      .official-sheet {
+        box-shadow: none !important;
+        margin: 0 !important;
+        width: 210mm;
+        min-height: 297mm;
+      }
+    }
+
+    /* Fora da impressão o documento oficial fica fora da tela (não display:none:
+       o Safari iOS ignora @media print em nós que estavam display:none). */
+    @media screen {
+      body:not(.is-printing) #print-root {
+        position: absolute;
+        left: -12000px;
+        top: 0;
+        width: 210mm;
+      }
+      body.is-printing #app { display: none !important; }
+      body.is-printing #print-root { position: static; left: auto; }
+    }
+
+    /* Guia visual da câmera (faixa da MRZ) */
+    .page-guide {
+      position: absolute;
+      left: 7%; right: 7%;
+      top: 7%; bottom: 8%;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 14px;
+      pointer-events: none;
+    }
+    .mrz-guide {
+      position: absolute; left: 9%; right: 9%; bottom: 10%;
+      height: 15%;
+      border: 2px dashed #f8e08e;
+      border-radius: 10px;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="text-slate-800">
+
+  <!-- ===================== INTERFACE MOBILE ===================== -->
+  <div id="app" class="no-print min-h-screen">
+    <header class="sticky top-0 z-30 bg-navy-800 text-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 shadow">
+      <p class="text-[10px] uppercase tracking-[0.18em] text-white/70">Dirección Nacional de Migraciones</p>
+      <h1 class="text-lg font-semibold leading-tight">Manifiesto de Pasajeros</h1>
+      <p class="text-xs text-white/80">Anexo I · Resolución 2997/85 · Corredor Turístico</p>
+    </header>
+
+    <main class="safe-bottom max-w-xl mx-auto px-3 py-4 space-y-4">
+
+      <!-- Cabeçalho do manifesto -->
+      <section class="bg-white rounded-2xl p-4 space-y-3 border border-slate-200">
+        <h2 class="text-sm font-semibold text-navy-800">Cabeçalho do manifesto</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <label class="col-span-2 text-xs font-medium">Medio de Transporte
+            <input id="f-medio" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="AUTOMOVIL / MICRO / VAN" />
+          </label>
+          <label class="text-xs font-medium">Placa
+            <input id="f-placa" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 uppercase" placeholder="ABC1D23" />
+          </label>
+          <label class="text-xs font-medium">Nación
+            <input id="f-nacion" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 uppercase" />
+          </label>
+          <label class="text-xs font-medium">Paso fronterizo
+            <input id="f-paso" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="PTN / Puerto Iguazú" />
+          </label>
+          <label class="text-xs font-medium">Fecha
+            <input id="f-fecha" type="date" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+          </label>
+          <label class="text-xs font-medium">Nº de Manifiesto
+            <input id="f-nro" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Opcional" />
+          </label>
+          <label class="text-xs font-medium">DEL
+            <input id="f-del" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Origen" />
+          </label>
+          <label class="text-xs font-medium">Por
+            <input id="f-por" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" placeholder="Destino / vía" />
+          </label>
+          <label class="col-span-2 text-xs font-medium">Consignado a (empresa / agencia)
+            <input id="f-consignado" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
+          </label>
+          <label class="col-span-2 text-xs font-medium">Cópias a gerar
+            <select id="f-copias" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
+              <option value="ambos">ENTRADA + SALIDA (corredor turístico)</option>
+              <option value="entrada">Só ENTRADA</option>
+              <option value="salida">Só SALIDA</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <!-- Guia / Tripulação -->
+      <section class="bg-white rounded-2xl p-4 space-y-3 border border-slate-200">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-navy-800">Guia / Tripulação</h2>
+          <button type="button" id="btn-add-crew" class="text-xs font-semibold text-navy-700">+ Tripulante</button>
+        </div>
+        <div class="rounded-xl bg-navy-50 p-3 space-y-2">
+          <p class="text-[11px] uppercase tracking-wide text-navy-700 font-semibold">Guía</p>
+          <input id="g-nombre" class="w-full rounded-xl border border-slate-300 px-3 py-2 font-medium" />
+          <div class="grid grid-cols-2 gap-2">
+            <input id="g-doc" class="rounded-xl border border-slate-300 px-3 py-2" placeholder="Tipo y Nº documento" />
+            <input id="g-nac" class="rounded-xl border border-slate-300 px-3 py-2" placeholder="Nacionalidad" />
+          </div>
+        </div>
+        <div id="crew-list" class="space-y-2"></div>
+      </section>
+
+      <!-- Passageiros -->
+      <section class="space-y-3">
+        <div class="flex items-end justify-between px-1">
+          <div>
+            <h2 class="text-sm font-semibold text-navy-800">Passageiros</h2>
+            <p id="pax-count" class="text-xs text-slate-500">0 na lista</p>
+          </div>
+          <button type="button" id="btn-add-pax" class="rounded-full bg-white border border-slate-300 px-3 py-1.5 text-xs font-semibold">+ Manual</button>
+        </div>
+
+        <button type="button" id="btn-scan-new" class="w-full rounded-2xl bg-navy-800 text-white py-3.5 text-base font-semibold shadow-sm active:scale-[0.99]">
+          Escanear Passaporte (MRZ)
+        </button>
+        <p class="text-[11px] text-slate-500 px-1">Enquadre a <strong>página de dados inteira</strong>. As duas linhas de baixo (MRZ) são a leitura principal; o restante da página confirma nome, data, nacionalidade e número.</p>
+
+        <div id="pax-list" class="space-y-3"></div>
+      </section>
+
+      <section class="bg-white rounded-2xl p-4 border border-slate-200 space-y-2">
+        <h2 class="text-sm font-semibold text-navy-800">Saídas</h2>
+        <button type="button" id="btn-print" class="w-full rounded-xl bg-navy-800 text-white py-3 font-semibold">Gerar Documento para Impressão</button>
+        <button type="button" id="btn-pdf" class="w-full rounded-xl bg-white border border-navy-700 text-navy-800 py-3 font-semibold">Gerar PDF Oficial</button>
+        <button type="button" id="btn-xlsx" class="w-full rounded-xl bg-white border border-slate-300 py-3 font-semibold">Exportar Excel (.xlsx)</button>
+        <p class="text-[11px] text-slate-500">No iPhone: Impressão abre o diálogo do Safari (AirPrint ou “Salvar em PDF”). Os arquivos PDF/Excel são baixados localmente, sem servidor.</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- ===================== DOCUMENTO OFICIAL (impressão A4) ===================== -->
+  <div id="print-root"></div>
+
+  <!-- ===================== MODAL SCANNER MRZ ===================== -->
+  <div id="scan-modal" class="no-print hidden fixed inset-0 z-50 bg-black/80 text-white">
+    <div class="flex flex-col h-full">
+      <div class="px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-between">
+        <h3 class="font-semibold">Leitura do passaporte</h3>
+        <button type="button" id="scan-close" class="px-3 py-1 rounded-full bg-white/15 text-sm">Fechar</button>
+      </div>
+      <div class="relative flex-1 bg-black overflow-hidden">
+        <video id="scan-video" class="w-full h-full object-cover" playsinline autoplay muted></video>
+        <canvas id="scan-canvas" class="hidden"></canvas>
+        <div class="page-guide"></div>
+        <div class="mrz-guide"></div>
+        <p class="absolute left-0 right-0 top-3 text-center text-xs text-yellow-200 px-6">Página inteira no quadro branco. As duas linhas de baixo na faixa amarela</p>
+        <div id="scan-confirm" class="hidden absolute inset-0 bg-[#0f2340]/96 overflow-auto p-4">
+          <p class="text-sm text-white/80 mb-3">Conferência — olhe no passaporte se estes dados estão certos:</p>
+          <div class="bg-white text-slate-900 rounded-2xl p-4 space-y-3">
+            <div>
+              <p class="text-[11px] uppercase tracking-wide text-slate-500">Apellido y Nombre</p>
+              <p id="cf-nombre" class="text-lg font-semibold leading-tight"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <p class="text-[11px] uppercase tracking-wide text-slate-500">Nascimento</p>
+                <p id="cf-nacim" class="font-semibold"></p>
+              </div>
+              <div>
+                <p class="text-[11px] uppercase tracking-wide text-slate-500">Nacionalidad</p>
+                <p id="cf-nacio" class="font-semibold"></p>
+              </div>
+            </div>
+            <div>
+              <p class="text-[11px] uppercase tracking-wide text-slate-500">Passaporte</p>
+              <p id="cf-doc" class="font-semibold tracking-wide"></p>
+            </div>
+            <p id="cf-note" class="text-xs leading-relaxed"></p>
+            <pre id="cf-raw" class="text-[10px] leading-tight font-mono bg-slate-100 rounded-lg p-2 overflow-x-auto text-slate-600"></pre>
+          </div>
+          <button type="button" id="scan-accept" class="mt-3 w-full rounded-xl bg-amber-400 text-navy-900 font-semibold py-3">Está certo — usar estes dados</button>
+          <button type="button" id="scan-retry" class="mt-2 w-full rounded-xl bg-white/10 font-semibold py-3">Ainda está errado — ler de novo</button>
+        </div>
+      </div>
+      <div class="px-4 py-3 space-y-2 bg-navy-900 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <p id="scan-status" class="text-xs text-white/80 min-h-[1.25rem]">Aguardando câmera…</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" id="scan-capture" class="rounded-xl bg-amber-400 text-navy-900 font-semibold py-3">Capturar e ler com calma</button>
+          <label class="rounded-xl bg-white/10 font-semibold py-3 text-center">
+            Galeria / Foto
+            <input id="scan-file" type="file" accept="image/*" capture="environment" class="hidden" />
+          </label>
+        </div>
+        <details class="text-xs">
+          <summary class="cursor-pointer text-white/70">Digitar MRZ manualmente</summary>
+          <textarea id="scan-manual" rows="3" class="mt-2 w-full rounded-xl text-slate-900 px-3 py-2 font-mono text-[12px]" placeholder="P<BRA...&#10;AB1234567BRA..."></textarea>
+          <button type="button" id="scan-parse-manual" class="mt-2 w-full rounded-xl bg-white text-navy-900 py-2 font-semibold">Aplicar texto MRZ</button>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /**
+   * Manifiesto de Pasajeros — SPA local (sem backend).
+   * Lê a zona MRZ (ICAO 9303 / TD3) do passaporte, preenche a lista e
+   * gera o Anexo I (Resolución 2997/85) para impressão, PDF e Excel.
+   */
+  (function () {
+    'use strict';
+
+    var STORAGE_KEY = 'manifesto-argentina-v1';
+    var MAX_ROWS_PER_SHEET = 6; // capacidade do formulário original
+    var GUIDE_NAME = 'Reginaldo Pereira Gomes';
+
+    var NAT = {
+      BRA: 'BRASILEÑA', ARG: 'ARGENTINA', PRY: 'PARAGUAYA', URY: 'URUGUAYA',
+      CHL: 'CHILENA', BOL: 'BOLIVIANA', PER: 'PERUANA', COL: 'COLOMBIANA',
+      VEN: 'VENEZOLANA', ECU: 'ECUATORIANA', USA: 'ESTADOUNIDENSE',
+      ITA: 'ITALIANA', ESP: 'ESPAÑOLA', PRT: 'PORTUGUESA', DEU: 'ALEMANA',
+      FRA: 'FRANCESA', GBR: 'BRITÁNICA', JPN: 'JAPONESA', CHN: 'CHINA',
+      KOR: 'COREANA', RUS: 'RUSA', MEX: 'MEXICANA', CAN: 'CANADIENSE',
+      AUS: 'AUSTRALIANA', NLD: 'NEERLANDESA', BEL: 'BELGA', CHE: 'SUIZA',
+      ISR: 'ISRAELÍ', IND: 'INDIA', ZAF: 'SUDAFRICANA', POL: 'POLACA',
+      UKR: 'UCRANIANA', ROU: 'RUMANA', TUR: 'TURCA', IRL: 'IRLANDESA',
+      SWE: 'SUECA', NOR: 'NORUEGA', DNK: 'DANESA', FIN: 'FINLANDESA',
+      AUT: 'AUSTRIACA', GRC: 'GRIEGA', CZE: 'CHECA', HUN: 'HÚNGARA',
+      NZL: 'NEOZELANDESA', SGP: 'SINGAPURENSE', THA: 'TAILANDESA',
+      IDN: 'INDONESIA', PHL: 'FILIPINA', VNM: 'VIETNAMITA',
+      ARE: 'EMIRATÍ', SAU: 'SAUDÍ', EGY: 'EGIPCIA', MAR: 'MARROQUÍ',
+      CUB: 'CUBANA', DOM: 'DOMINICANA', HTI: 'HAITIANA', PAN: 'PANAMEÑA',
+      CRI: 'COSTARRICENSE', NIC: 'NICARAGÜENSE', HND: 'HONDUREÑA',
+      SLV: 'SALVADOREÑA', GTM: 'GUATEMALTECA', TWN: 'TAIWANESA',
+      HKG: 'HONGKONESA', MYS: 'MALASIA', BGD: 'BANGLADESÍ', PAK: 'PAKISTANÍ'
+    };
+
+    /* Trocas comuns do OCR na fonte OCR-B da MRZ */
+    var CONFUSION = {
+      '0': ['O', 'D', 'Q'], '1': ['I', 'L', '7'], '2': ['Z'], '3': ['8', 'B'],
+      '4': ['A'], '5': ['S'], '6': ['G'], '8': ['B', '3'], '9': ['G'],
+      'A': ['4'], 'B': ['8', 'E', '3'], 'C': ['<', 'G'], 'D': ['0', 'O'],
+      'E': ['F', 'B'], 'F': ['P', 'E'], 'G': ['6', 'C'], 'I': ['1', 'L'],
+      'K': ['<', 'X'], 'L': ['1', 'I'], 'M': ['N'], 'N': ['M'],
+      'O': ['0', 'D', 'Q'], 'P': ['F', 'R'], 'Q': ['0', 'O'], 'R': ['P'],
+      'S': ['5'], 'T': ['1'], 'X': ['<', 'K'], 'Z': ['2'],
+      '<': ['K', 'C', 'X']
+    };
+
+    var state = loadState() || defaultState();
+    var scanTargetId = null; // null = novo passageiro
+    var mediaStream = null;
+    var ocrBusy = false;
+    var pendingParsed = null;
+    var tessWorker = null;
+    var tessWorkerPromise = null;
+
+    function defaultState() {
+      var today = new Date();
+      var iso = today.toISOString().slice(0, 10);
+      return {
+        header: {
+          medio: 'AUTOMOVIL',
+          placa: '',
+          nacion: 'BRASIL',
+          paso: 'PTN',
+          fecha: iso,
+          nro: '',
+          del: '',
+          por: '',
+          consignado: '',
+          copias: 'ambos'
+        },
+        guia: {
+          nombre: GUIDE_NAME,
+          documento: '',
+          nacionalidad: 'BRASILEÑA'
+        },
+        tripulacion: [],
+        pasajeros: []
+      };
+    }
+
+    function uid() {
+      return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    }
+
+    function loadState() {
+      try {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) { return null; }
+    }
+
+    function saveState() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {}
+    }
+
+    function $(id) { return document.getElementById(id); }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function fmtDateBR(iso) {
+      if (!iso) return '';
+      var p = String(iso).slice(0, 10).split('-');
+      if (p.length !== 3) return iso;
+      return p[2] + '/' + p[1] + '/' + p[0];
+    }
+
+    function yymmddToIso(yymmdd) {
+      if (!/^\d{6}$/.test(yymmdd)) return '';
+      var yy = parseInt(yymmdd.slice(0, 2), 10);
+      var mm = parseInt(yymmdd.slice(2, 4), 10);
+      var dd = parseInt(yymmdd.slice(4, 6), 10);
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return '';
+      var now = new Date().getFullYear();
+      var year = 2000 + yy;
+      if (year > now) year = 1900 + yy;
+      var mmS = (mm < 10 ? '0' : '') + mm;
+      var ddS = (dd < 10 ? '0' : '') + dd;
+      return year + '-' + mmS + '-' + ddS;
+    }
+
+    function isValidIsoDate(iso) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
+      var p = iso.split('-').map(Number);
+      var d = new Date(p[0], p[1] - 1, p[2]);
+      return d.getFullYear() === p[0] && (d.getMonth() + 1) === p[1] && d.getDate() === p[2];
+    }
+
+    /* ---------- MRZ (ICAO 9303) — parse + correção por dígito verificador ---------- */
+    function mrzValue(ch) {
+      if (ch === '<') return 0;
+      if (ch >= '0' && ch <= '9') return ch.charCodeAt(0) - 48;
+      if (ch >= 'A' && ch <= 'Z') return ch.charCodeAt(0) - 55;
+      return 0;
+    }
+
+    function mrzCheck(str, check) {
+      return mrzDigit(str) === String(check);
+    }
+
+    function mrzDigit(str) {
+      var weights = [7, 3, 1], sum = 0, i;
+      for (i = 0; i < str.length; i++) sum += mrzValue(str[i]) * weights[i % 3];
+      return String(sum % 10);
+    }
+
+    function hamming(a, b) {
+      if (a.length !== b.length) return 99;
+      var n = 0, i;
+      for (i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
+      return n;
+    }
+
+    function repairNat(code) {
+      code = String(code || '').toUpperCase();
+      if (NAT[code]) return code;
+      var keys = Object.keys(NAT), i, k;
+      for (i = 0; i < keys.length; i++) {
+        if (hamming(keys[i], code) === 1) return keys[i];
+      }
+      var alts, a, trial, p;
+      for (p = 0; p < 3; p++) {
+        alts = CONFUSION[code[p]] || [];
+        for (a = 0; a < alts.length; a++) {
+          trial = code.slice(0, p) + alts[a] + code.slice(p + 1);
+          if (NAT[trial]) return trial;
+        }
+      }
+      return code;
+    }
+
+    function repairCheckedField(field, check) {
+      field = String(field || '');
+      check = String(check || '');
+      if (mrzCheck(field, check)) return field;
+      var i, a, alts, trial;
+      for (i = 0; i < field.length; i++) {
+        alts = CONFUSION[field[i]] || [];
+        for (a = 0; a < alts.length; a++) {
+          trial = field.slice(0, i) + alts[a] + field.slice(i + 1);
+          if (mrzCheck(trial, check)) return trial;
+        }
+      }
+      return field;
+    }
+
+    function softenFillers(s) {
+      return String(s || '').replace(/[KCX]{3,}/g, function (m) {
+        return new Array(m.length + 1).join('<');
+      });
+    }
+
+    function normalizeMrzText(raw) {
+      return String(raw || '')
+        .toUpperCase()
+        .replace(/[«»‹›〈〉]/g, '<')
+        .replace(/[\u00A0\s]+/g, '')
+        .replace(/[^A-Z0-9<\n]/g, '');
+    }
+
+    function parseNames(field) {
+      field = softenFillers(field || '');
+      var bits = field.split('<<');
+      var surname = (bits[0] || '').replace(/</g, ' ').replace(/\s+/g, ' ').trim();
+      var given = (bits.slice(1).join(' ') || '').replace(/</g, ' ').replace(/\s+/g, ' ').trim();
+      var full = (surname + ' ' + given).replace(/\s+/g, ' ').trim();
+      return { surname: surname, given: given, full: full };
+    }
+
+    function looksLikeName(name) {
+      if (!name || name.length < 3) return false;
+      if (!/[A-Z]{2,}/.test(name)) return false;
+      if ((name.match(/[0-9]/g) || []).length > 0) return false;
+      var letters = (name.match(/[A-Z]/g) || []).length;
+      return letters >= 4;
+    }
+
+    function scoreParse(p) {
+      if (!p) return 0;
+      var s = 0;
+      if (p.line1 && p.line1[0] === 'P') s += 8;
+      if (NAT[p.issuer] || NAT[p.nacionalidadCode]) s += 12;
+      if (NAT[p.nacionalidadCode]) s += 14;
+      if (p.docCheckOk) s += 22;
+      if (p.birthCheckOk) s += 22;
+      if (p.expiryCheckOk) s += 8;
+      if (p.compositeOk) s += 10;
+      if (p.nacimiento && isValidIsoDate(p.nacimiento)) s += 10;
+      if (looksLikeName(p.apellidoNombre)) s += 12;
+      if (p.sexo === 'M' || p.sexo === 'F') s += 4;
+      if ((p.documento || '').length >= 5) s += 4;
+      if (p.apellidoNombre && /[0-9]/.test(p.apellidoNombre)) s -= 20;
+      if (!NAT[p.nacionalidadCode]) s -= 8;
+      return s;
+    }
+
+    function parseTD3(line1, line2) {
+      if (!line1 || !line2) return null;
+      line1 = softenFillers(String(line1).replace(/\s/g, '').toUpperCase());
+      line2 = String(line2).replace(/\s/g, '').toUpperCase();
+      if (line1.length < 38 || line2.length < 38) return null;
+      line1 = (line1 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44);
+      line2 = (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44);
+      if (line1[0] !== 'P' && line1[0] !== 'R' && line1[0] !== 'F') return null;
+      if (line1[0] !== 'P') line1 = 'P' + line1.slice(1);
+      if (line1[1] === 'K' || line1[1] === 'C' || line1[1] === 'X' || line1[1] === '(') {
+        line1 = 'P<' + line1.slice(2);
+      } else if (line1[1] !== '<' && !/[A-Z]/.test(line1[1])) {
+        line1 = 'P<' + line1.slice(2);
+      }
+
+      var issuer = repairNat(line1.slice(2, 5));
+      var names = parseNames(line1.slice(5));
+      var docField = repairCheckedField(line2.slice(0, 9), line2[9]);
+      var docNum = docField.replace(/</g, '');
+      var nationality = repairNat(line2.slice(10, 13));
+      var birthField = repairCheckedField(line2.slice(14, 20), line2[20]);
+      var birth = yymmddToIso(birthField);
+      var sex = line2[21];
+      if (sex !== 'M' && sex !== 'F' && sex !== '<') {
+        if (sex === 'H' || sex === 'N') sex = 'M';
+        else if (sex === 'E' || sex === 'P') sex = 'F';
+      }
+      var expiryField = repairCheckedField(line2.slice(22, 28), line2[28]);
+      var optional = line2.slice(29, 42);
+      var compositeSrc = docField + line2[9] + birthField + line2[20] + expiryField + line2[28] + optional;
+      var compositeOk = mrzCheck(compositeSrc, line2[43]);
+
+      var parsed = {
+        tipo: 'PASAPORTE',
+        documento: docNum,
+        apellidoNombre: names.full,
+        apellido: names.surname,
+        nombre: names.given,
+        nacionalidad: NAT[nationality] || nationality,
+        nacionalidadCode: nationality,
+        issuer: issuer,
+        nacimiento: birth,
+        sexo: sex === 'F' ? 'F' : (sex === 'M' ? 'M' : ''),
+        docCheckOk: mrzCheck(docField, line2[9]),
+        birthCheckOk: mrzCheck(birthField, line2[20]),
+        expiryCheckOk: mrzCheck(expiryField, line2[28]),
+        compositeOk: compositeOk,
+        line1: line1,
+        line2: line2
+      };
+      parsed.score = scoreParse(parsed);
+      return parsed;
+    }
+
+    function collectTd3Candidates(raw) {
+      var text = String(raw || '').toUpperCase().replace(/[«»‹›]/g, '<');
+      var lines = text.split(/\n+/).map(function (l) {
+        return l.replace(/[^A-Z0-9<]/g, '');
+      }).filter(function (l) { return l.length >= 20; });
+      var blob = normalizeMrzText(text).replace(/\n/g, '');
+      var found = [];
+      var seen = {};
+      function add(p) {
+        if (!p || !p.apellidoNombre) return;
+        var key = p.documento + '|' + p.apellidoNombre + '|' + p.nacimiento;
+        if (seen[key] && seen[key].score >= p.score) return;
+        seen[key] = p;
+      }
+
+      var i, p;
+      for (i = 0; i < lines.length; i++) {
+        if (lines[i + 1]) {
+          p = parseTD3(lines[i], lines[i + 1]);
+          if (p) add(p);
+        }
+      }
+
+      var idx, ch;
+      for (idx = 0; idx < blob.length - 87; idx++) {
+        ch = blob[idx];
+        if (ch !== 'P' && ch !== 'R' && ch !== 'F') continue;
+        p = parseTD3(blob.substr(idx, 44), blob.substr(idx + 44, 44));
+        if (p) add(p);
+      }
+
+      found = Object.keys(seen).map(function (k) { return seen[k]; });
+      found.sort(function (a, b) { return b.score - a.score; });
+      return found;
+    }
+
+    function extractMRZFromText(raw) {
+      var list = collectTd3Candidates(raw);
+      return list.length ? list[0] : null;
+    }
+
+    function foldKey(s) {
+      return String(s || '')
+        .toUpperCase()
+        .replace(/[ÁÀÂÃÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E')
+        .replace(/[ÍÌÎÏ]/g, 'I').replace(/[ÓÒÔÕÖ]/g, 'O')
+        .replace(/[ÚÙÛÜ]/g, 'U').replace(/Ç/g, 'C').replace(/Ñ/g, 'N')
+        .replace(/[^A-Z0-9]/g, '');
+    }
+
+    function nameTokens(s) {
+      return String(s || '').toUpperCase().replace(/[^A-Z\s]/g, ' ').split(/\s+/).filter(function (t) {
+        return t.length >= 2;
+      });
+    }
+
+    function nameCompatible(mrzName, vizName) {
+      var a = nameTokens(mrzName), b = nameTokens(vizName), i, j, hits = 0, ok;
+      if (!a.length || !b.length) return false;
+      for (i = 0; i < a.length; i++) {
+        ok = false;
+        for (j = 0; j < b.length; j++) {
+          if (a[i] === b[j] || b[j].indexOf(a[i]) === 0 || a[i].indexOf(b[j]) === 0) { ok = true; break; }
+          if (a[i].length >= 4 && b[j].length >= 4 && a[i].slice(0, 4) === b[j].slice(0, 4)) { ok = true; break; }
+        }
+        if (ok) hits++;
+      }
+      return hits >= Math.min(2, a.length) || (hits / a.length) >= 0.6;
+    }
+
+    var MONTHS = {
+      JAN: 1, FEB: 2, FEV: 2, MAR: 3, APR: 4, ABR: 4, MAY: 5, MAI: 5,
+      JUN: 6, JUL: 7, AUG: 8, AGO: 8, SEP: 9, SET: 9, OCT: 10, OUT: 10,
+      NOV: 11, DEC: 12, DEZ: 12, DIC: 12, ENE: 1, AVR: 4, AOU: 8
+    };
+
+    var NAT_WORDS = {
+      BRASIL: 'BRA', BRAZIL: 'BRA', BRAZILIAN: 'BRA', BRASILEIRA: 'BRA', BRASILEIRO: 'BRA',
+      ARGENTINA: 'ARG', ARGENTINE: 'ARG', ARGENTINO: 'ARG',
+      PARAGUAY: 'PRY', PARAGUAYA: 'PRY', PARAGUAYO: 'PRY',
+      URUGUAY: 'URY', URUGUAYA: 'URY', URUGUAYO: 'URY',
+      CHILE: 'CHL', CHILENA: 'CHL', CHILENO: 'CHL',
+      BOLIVIA: 'BOL', BOLIVIANA: 'BOL', PERU: 'PER', PERUANA: 'PER',
+      COLOMBIA: 'COL', COLOMBIANA: 'COL', VENEZUELA: 'VEN', VENEZOLANA: 'VEN',
+      ITALIA: 'ITA', ITALY: 'ITA', ITALIANA: 'ITA', ITALIAN: 'ITA',
+      ESPANA: 'ESP', SPAIN: 'ESP', ESPANOLA: 'ESP', PORTUGAL: 'PRT', PORTUGUESA: 'PRT',
+      GERMANY: 'DEU', ALEMANA: 'DEU', ALEMANHA: 'DEU', FRANCE: 'FRA', FRANCESA: 'FRA',
+      USA: 'USA', AMERICAN: 'USA', ESTADOUNIDENSE: 'USA', UNITEDSTATES: 'USA',
+      JAPAN: 'JPN', JAPONESA: 'JPN', CHINA: 'CHN', CHINESE: 'CHN'
+    };
+
+    function toIsoParts(dd, mm, yyyy) {
+      dd = parseInt(dd, 10); mm = parseInt(mm, 10); yyyy = parseInt(yyyy, 10);
+      if (yyyy < 100) yyyy = yyyy > 30 ? 1900 + yyyy : 2000 + yyyy;
+      if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1910 || yyyy > 2035) return '';
+      var iso = yyyy + '-' + (mm < 10 ? '0' : '') + mm + '-' + (dd < 10 ? '0' : '') + dd;
+      return isValidIsoDate(iso) ? iso : '';
+    }
+
+    function datesFromViz(text) {
+      var u = String(text || '').toUpperCase();
+      var out = [], m, iso;
+      var re1 = /(\d{1,2})\s*[\.\/\-]\s*(\d{1,2})\s*[\.\/\-]\s*(\d{2,4})/g;
+      while ((m = re1.exec(u))) {
+        iso = toIsoParts(m[1], m[2], m[3]);
+        if (iso && out.indexOf(iso) < 0) out.push(iso);
+      }
+      var re2 = /(\d{1,2})[.\s\/\-]+([A-Z]{3})[.\s\/\-]+(\d{2,4})/g;
+      while ((m = re2.exec(u))) {
+        if (!MONTHS[m[2]]) continue;
+        iso = toIsoParts(m[1], MONTHS[m[2]], m[3]);
+        if (iso && out.indexOf(iso) < 0) out.push(iso);
+      }
+      return out;
+    }
+
+    function afterLabel(text, labels) {
+      var u = String(text || '').toUpperCase();
+      var i, idx, rest, lines, line, j;
+      for (i = 0; i < labels.length; i++) {
+        idx = u.indexOf(labels[i]);
+        if (idx < 0) continue;
+        rest = u.slice(idx + labels[i].length).replace(/^[\s:.\-\/]+/, '');
+        lines = rest.split(/\n+/);
+        for (j = 0; j < Math.min(3, lines.length); j++) {
+          line = lines[j].replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+          if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE)/.test(line)) {
+            return line;
+          }
+        }
+      }
+      return '';
+    }
+
+    function parseVIZ(text, mrz) {
+      var viz = { documento: '', nacimiento: '', nacionalidadCode: '', apellidoNombre: '' };
+      var u = String(text || '').toUpperCase();
+      var folded = foldKey(u);
+      var i, keys, k, code, token, dates, iso;
+
+      if (mrz && mrz.documento && folded.indexOf(foldKey(mrz.documento)) >= 0) {
+        viz.documento = mrz.documento;
+      } else {
+        var nums = u.match(/\b[A-Z0-9]{6,9}\b/g) || [];
+        for (i = 0; i < nums.length; i++) {
+          if (mrz && mrz.documento && hamming(nums[i], mrz.documento) <= 1) {
+            viz.documento = mrz.documento;
+            break;
+          }
+        }
+      }
+
+      dates = datesFromViz(u);
+      if (mrz && mrz.nacimiento && dates.indexOf(mrz.nacimiento) >= 0) {
+        viz.nacimiento = mrz.nacimiento;
+      } else if (dates.length) {
+        for (i = 0; i < dates.length; i++) {
+          iso = dates[i];
+          var year = parseInt(iso.slice(0, 4), 10);
+          var age = new Date().getFullYear() - year;
+          if (age >= 1 && age <= 100) { viz.nacimiento = iso; break; }
+        }
+      }
+
+      keys = Object.keys(NAT_WORDS);
+      for (i = 0; i < keys.length; i++) {
+        k = keys[i];
+        if (folded.indexOf(k) >= 0) {
+          viz.nacionalidadCode = NAT_WORDS[k];
+          break;
+        }
+      }
+      if (!viz.nacionalidadCode && mrz && mrz.nacionalidadCode && folded.indexOf(mrz.nacionalidadCode) >= 0) {
+        viz.nacionalidadCode = mrz.nacionalidadCode;
+      }
+
+      var surname = afterLabel(u, ['SOBRENOME', 'SURNAME', 'APELLIDOS', 'APELLIDO']);
+      var given = afterLabel(u, ['GIVEN NAMES', 'GIVEN NAME', 'NOMES', 'NOME/', 'NOME ', 'PRENOM']);
+      var combined = (surname + ' ' + given).replace(/\s+/g, ' ').trim();
+      if (combined.length >= 4) viz.apellidoNombre = combined;
+      else {
+        var named = afterLabel(u, ['APELLIDO Y NOMBRE', 'NOME COMPLETO']);
+        if (named) viz.apellidoNombre = named;
+      }
+      if (mrz && mrz.apellidoNombre && nameCompatible(mrz.apellidoNombre, u)) {
+        if (!viz.apellidoNombre) viz.apellidoNombre = mrz.apellidoNombre;
+      }
+      return viz;
+    }
+
+    function mergeMrzAndViz(mrz, viz) {
+      if (!mrz) return null;
+      mrz.checks = mrz.checks || [];
+
+      if (viz.documento && viz.documento === mrz.documento) {
+        mrz.score += 8;
+        mrz.checks.push('Número do passaporte igual na MRZ e na página.');
+      } else if (viz.documento && viz.documento !== mrz.documento) {
+        if (!mrz.docCheckOk) {
+          mrz.documento = viz.documento;
+          mrz.checks.push('O número da MRZ não fechou o dígito; usei o número impresso na página.');
+        } else {
+          mrz.checks.push('A página mostrou outro número; mantive a MRZ, que fechou o dígito.');
+        }
+      }
+
+      if (viz.nacimiento && viz.nacimiento === mrz.nacimiento) {
+        mrz.score += 8;
+        mrz.checks.push('Data de nascimento igual na MRZ e na página.');
+      } else if (viz.nacimiento && viz.nacimiento !== mrz.nacimiento) {
+        if (!mrz.birthCheckOk && isValidIsoDate(viz.nacimiento)) {
+          mrz.nacimiento = viz.nacimiento;
+          mrz.checks.push('A data da MRZ não fechou o dígito; usei a data impressa na página.');
+        } else if (mrz.nacimiento) {
+          mrz.checks.push('A página mostrou outra data (' + fmtDateBR(viz.nacimiento) + '); mantive a da MRZ.');
+        }
+      }
+
+      if (viz.nacionalidadCode && viz.nacionalidadCode === mrz.nacionalidadCode) {
+        mrz.score += 6;
+        mrz.checks.push('Nacionalidade confirmada na página.');
+      } else if (viz.nacionalidadCode && NAT[viz.nacionalidadCode] && !NAT[mrz.nacionalidadCode]) {
+        mrz.nacionalidadCode = viz.nacionalidadCode;
+        mrz.nacionalidad = NAT[viz.nacionalidadCode];
+        mrz.checks.push('Nacionalidade ajustada pela página: ' + mrz.nacionalidad);
+      } else if (viz.nacionalidadCode && NAT[viz.nacionalidadCode] && viz.nacionalidadCode !== mrz.nacionalidadCode) {
+        mrz.checks.push('Nacionalidade da página (' + (NAT[viz.nacionalidadCode] || viz.nacionalidadCode) + ') diferente da MRZ; mantive a MRZ.');
+      }
+
+      if (viz.apellidoNombre && looksLikeName(viz.apellidoNombre) && nameCompatible(mrz.apellidoNombre, viz.apellidoNombre)) {
+        if (viz.apellidoNombre.length > (mrz.apellidoNombre || '').length) {
+          mrz.apellidoNombre = viz.apellidoNombre;
+          mrz.checks.push('Nome completo veio da página (a MRZ às vezes corta o nome).');
+        } else {
+          mrz.checks.push('Nome da MRZ conferido com a página.');
+        }
+        mrz.score += 8;
+      } else if (viz.apellidoNombre && looksLikeName(viz.apellidoNombre) && !looksLikeName(mrz.apellidoNombre)) {
+        mrz.apellidoNombre = viz.apellidoNombre;
+        mrz.checks.push('Nome da MRZ estava ilegível; usei o nome impresso na página.');
+      } else if (viz.apellidoNombre && looksLikeName(mrz.apellidoNombre) && !nameCompatible(mrz.apellidoNombre, viz.apellidoNombre)) {
+        mrz.checks.push('Nome da página não bateu com a MRZ; mantive o da MRZ.');
+      } else if (!viz.apellidoNombre) {
+        mrz.checks.push('A página não devolveu um nome claro; o nome veio só das duas linhas de baixo.');
+      }
+
+      mrz.nacionalidad = NAT[mrz.nacionalidadCode] || mrz.nacionalidad;
+      return mrz;
+    }
+
+    /* ---------- UI: bind header / guia ---------- */
+    function bindHeader() {
+      var map = {
+        'f-medio': 'medio', 'f-placa': 'placa', 'f-nacion': 'nacion',
+        'f-paso': 'paso', 'f-fecha': 'fecha', 'f-nro': 'nro',
+        'f-del': 'del', 'f-por': 'por', 'f-consignado': 'consignado',
+        'f-copias': 'copias'
+      };
+      Object.keys(map).forEach(function (id) {
+        var el = $(id);
+        el.value = state.header[map[id]] || '';
+        el.addEventListener('input', function () {
+          state.header[map[id]] = el.value;
+          saveState();
+        });
+      });
+      $('g-nombre').value = state.guia.nombre || GUIDE_NAME;
+      $('g-doc').value = state.guia.documento || '';
+      $('g-nac').value = state.guia.nacionalidad || '';
+      ['g-nombre', 'g-doc', 'g-nac'].forEach(function (id) {
+        $(id).addEventListener('input', function () {
+          state.guia.nombre = $('g-nombre').value;
+          state.guia.documento = $('g-doc').value;
+          state.guia.nacionalidad = $('g-nac').value;
+          saveState();
+        });
+      });
+    }
+
+    function renderCrew() {
+      var root = $('crew-list');
+      root.innerHTML = state.tripulacion.map(function (c, idx) {
+        return '<div class="rounded-xl border border-slate-200 p-3 space-y-2">' +
+          '<div class="flex justify-between items-center"><p class="text-[11px] font-semibold uppercase text-slate-500">Tripulante ' + (idx + 1) + '</p>' +
+          '<button type="button" data-del-crew="' + c.id + '" class="text-xs text-red-600">Remover</button></div>' +
+          '<input data-crew="' + c.id + '" data-field="nombre" class="w-full rounded-xl border px-3 py-2" placeholder="Apellido y Nombre" value="' + escapeHtml(c.nombre) + '" />' +
+          '<input data-crew="' + c.id + '" data-field="documento" class="w-full rounded-xl border px-3 py-2" placeholder="Tipo y Nº de documento" value="' + escapeHtml(c.documento) + '" />' +
+          '</div>';
+      }).join('');
+    }
+
+    function renderPax() {
+      $('pax-count').textContent = state.pasajeros.length + ' na lista · ' +
+        crewCount() + ' tripulante(s)';
+      var root = $('pax-list');
+      if (!state.pasajeros.length) {
+        root.innerHTML = '<p class="text-sm text-slate-500 text-center py-6">Nenhum passageiro ainda. Escaneie um passaporte ou adicione manualmente.</p>';
+        return;
+      }
+      root.innerHTML = state.pasajeros.map(function (p, i) {
+        return '<article class="bg-white rounded-2xl p-4 border border-slate-200 space-y-2">' +
+          '<div class="flex items-center justify-between">' +
+          '<p class="text-xs font-semibold text-navy-700">Passageiro ' + (i + 1) + '</p>' +
+          '<div class="flex gap-2">' +
+          '<button type="button" class="text-xs font-semibold text-navy-700" data-scan="' + p.id + '">Reescanear</button>' +
+          '<button type="button" class="text-xs text-red-600" data-del="' + p.id + '">Remover</button>' +
+          '</div></div>' +
+          '<label class="text-xs font-medium block">Apellido y Nombre' +
+          '<input data-pax="' + p.id + '" data-field="apellidoNombre" class="mt-1 w-full rounded-xl border px-3 py-2" value="' + escapeHtml(p.apellidoNombre) + '" /></label>' +
+          '<div class="grid grid-cols-2 gap-2">' +
+          '<label class="text-xs font-medium">Fecha de nacimiento' +
+          '<input type="date" data-pax="' + p.id + '" data-field="nacimiento" class="mt-1 w-full rounded-xl border px-3 py-2" value="' + escapeHtml(p.nacimiento) + '" /></label>' +
+          '<label class="text-xs font-medium">Nacionalidad' +
+          '<input data-pax="' + p.id + '" data-field="nacionalidad" class="mt-1 w-full rounded-xl border px-3 py-2" value="' + escapeHtml(p.nacionalidad) + '" /></label>' +
+          '</div>' +
+          '<label class="text-xs font-medium block">Tipo y Nº de documento' +
+          '<input data-pax="' + p.id + '" data-field="documento" class="mt-1 w-full rounded-xl border px-3 py-2" value="' + escapeHtml(p.documento) + '" /></label>' +
+          '<label class="text-xs font-medium">Calificación migratoria' +
+          '<select data-pax="' + p.id + '" data-field="visa" class="mt-1 w-full rounded-xl border px-3 py-2 bg-white">' +
+          '<option value="sin"' + (p.visa !== 'con' ? ' selected' : '') + '>Sin Visa</option>' +
+          '<option value="con"' + (p.visa === 'con' ? ' selected' : '') + '>Con Visa</option>' +
+          '</select></label>' +
+          '</article>';
+      }).join('');
+    }
+
+    function crewCount() {
+      return 1 + state.tripulacion.filter(function (c) { return (c.nombre || '').trim(); }).length;
+    }
+
+    function filledPax() {
+      return state.pasajeros.filter(function (p) { return (p.apellidoNombre || '').trim(); });
+    }
+
+    /* ---------- Documento oficial HTML (impressão Safari) ---------- */
+    function sheetHtml(kind, hoja, totalHojas, rows) {
+      var h = state.header;
+      var fecha = fmtDateBR(h.fecha);
+      var guiaLine = (state.guia.nombre || '') + (state.guia.documento ? '  ' + state.guia.documento : '');
+      var crew2 = state.tripulacion[0] || { nombre: '', documento: '' };
+      var crewLine = ((crew2.nombre || '') + (crew2.documento ? '  ' + crew2.documento : '')).trim();
+      var body = '';
+      var i, p;
+      for (i = 0; i < MAX_ROWS_PER_SHEET; i++) {
+        p = rows[i];
+        body += '<tr>' +
+          '<td style="width:8%;text-align:center">' + (p ? (p.n) + '.' : (i + 1 + (hoja - 1) * MAX_ROWS_PER_SHEET) + '.') + '</td>' +
+          '<td style="width:32%">' + escapeHtml(p ? p.apellidoNombre : '') + '</td>' +
+          '<td style="width:16%;text-align:center">' + escapeHtml(p ? fmtDateBR(p.nacimiento) : '') + '</td>' +
+          '<td style="width:14%;text-align:center">' + escapeHtml(p ? p.nacionalidad : '') + '</td>' +
+          '<td style="width:18%">' + escapeHtml(p ? p.documento : '') + '</td>' +
+          '<td style="width:6%;text-align:center">' + (p && p.visa !== 'con' ? 'X' : '') + '</td>' +
+          '<td style="width:6%;text-align:center">' + (p && p.visa === 'con' ? 'X' : '') + '</td>' +
+          '</tr>';
+      }
+      return (
+        '<section class="official-sheet">' +
+        '<div class="of-box" style="padding:4px 6px 8px">' +
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">' +
+            '<div class="of-sm" style="font-weight:700">MINISTERIO DEL INTERIOR — DIRECCIÓN NACIONAL DE MIGRACIONES</div>' +
+            '<div class="of-stamp" style="color:#1a1a1a">' + kind + '</div>' +
+          '</div>' +
+          '<div style="display:flex;justify-content:space-between;margin-top:4px" class="of-sm">' +
+            '<span>HOJA Nº: ' + hoja + ' / ' + totalHojas + '</span>' +
+            '<span style="font-weight:700">ANEXO I &nbsp; Resolución 2997/85</span>' +
+          '</div>' +
+          '<div class="of-title" style="margin:8px 0 6px">Manifiesto de Tripulantes y Pasajeros — Exclusivo Corredor Turístico</div>' +
+          '<div class="of-sm" style="display:grid;grid-template-columns:1.2fr 1fr 0.9fr;gap:4px 8px">' +
+            '<div>Nº DE MANIFIESTO: <b>' + escapeHtml(h.nro) + '</b></div>' +
+            '<div>DEL: <b>' + escapeHtml(h.del) + '</b></div>' +
+            '<div>PLACA: <b>' + escapeHtml((h.placa || '').toUpperCase()) + '</b></div>' +
+            '<div>Medio de Transporte: <b>' + escapeHtml(h.medio) + '</b></div>' +
+            '<div>Nación: <b>' + escapeHtml(h.nacion) + '</b></div>' +
+            '<div style="text-align:right;font-weight:700">USO OFICIAL</div>' +
+            '<div>Con FECHA: <b>' + fecha + '</b></div>' +
+            '<div>Por: <b>' + escapeHtml(h.por) + '</b></div>' +
+            '<div>PASAJEROS: <b>' + filledPax().length + '</b></div>' +
+            '<div>Paso fronterizo: <b>' + escapeHtml(h.paso) + '</b></div>' +
+            '<div></div>' +
+            '<div>TRIPULANTE: <b>' + crewCount() + '</b></div>' +
+          '</div>' +
+          '<div class="of-sm" style="margin-top:6px">CONSIGNADO A: <b>' + escapeHtml(h.consignado) + '</b></div>' +
+          '<div class="of-tiny" style="margin-top:2px;color:#333">Nombre completo de la Empresa, Compañía y/o agencia propietaria, consignataria o exploradora del transporte</div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 90px;gap:6px;margin-top:8px">' +
+            '<div class="of-inner" style="padding:4px;min-height:52px">' +
+              '<div class="of-tiny" style="font-weight:700">GUIA — Apellido y nombre / Tipo y Nº de Documento</div>' +
+              '<div class="of-sm" style="margin-top:6px"><b>' + escapeHtml(guiaLine) + '</b></div>' +
+            '</div>' +
+            '<div class="of-inner" style="padding:4px;min-height:52px">' +
+              '<div class="of-tiny" style="font-weight:700">TRIPULACIÓN — Apellido y nombre / Tipo y Nº de Documento</div>' +
+              '<div class="of-sm" style="margin-top:6px"><b>' + escapeHtml(crewLine) + '</b></div>' +
+            '</div>' +
+            '<div class="of-inner" style="padding:4px;text-align:center">' +
+              '<div class="of-tiny" style="font-weight:700">CALIFICACIÓN<br/>MIGRATORIA</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="of-md" style="font-weight:800;margin:8px 0 4px;text-align:center;letter-spacing:2px">PASAJEROS</div>' +
+          '<table class="of-table">' +
+            '<thead><tr>' +
+              '<th>Nº</th><th>Apellido y Nombre</th><th>Fecha de nacimiento</th>' +
+              '<th>Nacionalidad</th><th>Tipo y Nº de documento</th>' +
+              '<th>Sin Visa</th><th>Con Visa</th>' +
+            '</tr></thead>' +
+            '<tbody>' + body + '</tbody>' +
+          '</table>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:10px">' +
+            '<div class="of-sign">Responsable del Transporte<br/><span class="of-tiny">' + escapeHtml(state.guia.nombre) + '</span></div>' +
+            '<div class="of-sign">FIRMA SUPERVISOR</div>' +
+            '<div class="of-sign">SELLO DE CONTROL</div>' +
+          '</div>' +
+        '</div></section>'
+      );
+    }
+
+    function buildPrintPages() {
+      var list = filledPax();
+      var chunks = [];
+      var i, n = Math.max(1, Math.ceil(list.length / MAX_ROWS_PER_SHEET));
+      for (i = 0; i < n; i++) {
+        chunks.push(list.slice(i * MAX_ROWS_PER_SHEET, (i + 1) * MAX_ROWS_PER_SHEET).map(function (p, idx) {
+          return Object.assign({ n: i * MAX_ROWS_PER_SHEET + idx + 1 }, p);
+        }));
+      }
+      var kinds = [];
+      if (state.header.copias !== 'salida') kinds.push('ENTRADA');
+      if (state.header.copias !== 'entrada') kinds.push('SALIDA');
+      var html = '';
+      kinds.forEach(function (kind) {
+        chunks.forEach(function (rows, idx) {
+          html += sheetHtml(kind, idx + 1, chunks.length, rows);
+        });
+      });
+      return html;
+    }
+
+    function syncPrintRoot() {
+      $('print-root').innerHTML = buildPrintPages();
+    }
+
+    /* ---------- PDF oficial: html2canvas (fidelidade visual) + fallback vetorial ---------- */
+    function generateOfficialPdf() {
+      if (!window.jspdf || !window.jspdf.jsPDF) {
+        alert('Biblioteca jsPDF não carregou. Use o botão de impressão do Safari.');
+        return;
+      }
+      syncPrintRoot();
+      var sheets = document.querySelectorAll('#print-root .official-sheet');
+      if (!sheets.length) {
+        generateVectorPdf();
+        return;
+      }
+      if (typeof html2canvas !== 'function') {
+        generateVectorPdf();
+        return;
+      }
+      var jsPDF = window.jspdf.jsPDF;
+      var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      var chain = Promise.resolve();
+      Array.prototype.forEach.call(sheets, function (sheet, idx) {
+        chain = chain.then(function () {
+          return html2canvas(sheet, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true,
+            logging: false,
+            windowWidth: sheet.scrollWidth
+          }).then(function (canvas) {
+            var img = canvas.toDataURL('image/jpeg', 0.92);
+            if (idx > 0) pdf.addPage();
+            pdf.addImage(img, 'JPEG', 0, 0, 210, 297);
+          });
+        });
+      });
+      chain.then(function () {
+        pdf.save('Manifiesto_' + (state.header.fecha || '') + '_' + kindSafe() + '.pdf');
+      }).catch(function () {
+        generateVectorPdf();
+      });
+    }
+
+    function generateVectorPdf() {
+      var jsPDF = window.jspdf.jsPDF;
+      var doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      var list = filledPax();
+      var nSheets = Math.max(1, Math.ceil(list.length / MAX_ROWS_PER_SHEET));
+      var kinds = [];
+      if (state.header.copias !== 'salida') kinds.push('ENTRADA');
+      if (state.header.copias !== 'entrada') kinds.push('SALIDA');
+      var first = true;
+
+      kinds.forEach(function (kind) {
+        var s;
+        for (s = 0; s < nSheets; s++) {
+          if (!first) doc.addPage();
+          first = false;
+          drawPdfSheet(doc, kind, s + 1, nSheets, list.slice(s * MAX_ROWS_PER_SHEET, (s + 1) * MAX_ROWS_PER_SHEET));
+        }
+      });
+      doc.save('Manifiesto_' + (state.header.fecha || '') + '_' + kindSafe() + '.pdf');
+    }
+
+    function kindSafe() {
+      return (state.header.copias || 'ambos').toUpperCase();
+    }
+
+    function drawPdfSheet(doc, kind, hoja, total, rows) {
+      var h = state.header;
+      var x = 8, y = 8, w = 194;
+      doc.setLineWidth(0.35);
+      doc.rect(x, y, w, 281);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('MINISTERIO DEL INTERIOR — DIRECCIÓN NACIONAL DE MIGRACIONES', x + 3, y + 6);
+      doc.setFontSize(16);
+      doc.text(kind, x + w - 4, y + 7, { align: 'right' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text('HOJA Nº: ' + hoja + ' / ' + total, x + 3, y + 12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('ANEXO I  Resolución 2997/85', x + w - 4, y + 12, { align: 'right' });
+
+      doc.setFontSize(11);
+      doc.text('MANIFIESTO DE TRIPULANTES Y PASAJEROS', 105, y + 20, { align: 'center' });
+      doc.setFontSize(9);
+      doc.text('EXCLUSIVO CORREDOR TURÍSTICO', 105, y + 25, { align: 'center' });
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      var fecha = fmtDateBR(h.fecha);
+      var lines = [
+        ['Nº DE MANIFIESTO: ' + (h.nro || ''), 'DEL: ' + (h.del || ''), 'PLACA: ' + (h.placa || '').toUpperCase()],
+        ['Medio de Transporte: ' + (h.medio || ''), 'Nación: ' + (h.nacion || ''), 'USO OFICIAL'],
+        ['Con FECHA: ' + fecha, 'Por: ' + (h.por || ''), 'PASAJEROS: ' + filledPax().length],
+        ['Paso fronterizo: ' + (h.paso || ''), '', 'TRIPULANTE: ' + crewCount()]
+      ];
+      var ly = y + 32, li;
+      for (li = 0; li < lines.length; li++) {
+        doc.text(lines[li][0], x + 3, ly);
+        doc.text(lines[li][1], x + 72, ly);
+        doc.text(lines[li][2], x + 140, ly);
+        ly += 5;
+      }
+      doc.text('CONSIGNADO A: ' + (h.consignado || ''), x + 3, ly + 1);
+      doc.setFontSize(6.5);
+      doc.setTextColor(60);
+      doc.text('Nombre completo de la Empresa, Compañía y/o agencia propietaria, consignataria o exploradora del transporte', x + 3, ly + 5);
+      doc.setTextColor(0);
+
+      var boxY = ly + 8;
+      doc.rect(x + 3, boxY, 88, 18);
+      doc.rect(x + 93, boxY, 72, 18);
+      doc.rect(x + 167, boxY, 24, 18);
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.text('GUIA — Apellido y nombre  Tipo y Nº de Documento', x + 5, boxY + 4);
+      doc.text('TRIPULACIÓN — Apellido y nombre  Tipo y Nº', x + 95, boxY + 4);
+      doc.text('CALIFICACIÓN', x + 169, boxY + 6);
+      doc.text('MIGRATORIA', x + 169, boxY + 9);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(state.guia.nombre || '', x + 5, boxY + 10);
+      doc.text(state.guia.documento || '', x + 5, boxY + 15);
+      var c2 = state.tripulacion[0] || {};
+      doc.text(c2.nombre || '', x + 95, boxY + 10);
+      doc.text(c2.documento || '', x + 95, boxY + 15);
+
+      var ty = boxY + 24;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text('PASAJEROS', 105, ty, { align: 'center' });
+
+      var cols = [10, 56, 26, 26, 40, 15, 15];
+      var headers = ['Nº', 'Apellido y Nombre', 'Fecha de nacimiento', 'Nacionalidad', 'Tipo y Nº de documento', 'Sin Visa', 'Con Visa'];
+      var tx = x + 3, hy = ty + 3, rowH = 12, i, cx, p, n, colX;
+      doc.setFontSize(6.5);
+      doc.setFillColor(240, 240, 240);
+      doc.rect(tx, hy, 188, 7, 'FD');
+      cx = tx;
+      for (i = 0; i < cols.length; i++) {
+        doc.rect(cx, hy, cols[i], 7);
+        doc.text(headers[i], cx + cols[i] / 2, hy + 4.6, { align: 'center' });
+        cx += cols[i];
+      }
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7.5);
+      for (i = 0; i < MAX_ROWS_PER_SHEET; i++) {
+        var ry = hy + 7 + i * rowH;
+        cx = tx;
+        colX = [];
+        for (var c = 0; c < cols.length; c++) {
+          colX.push(cx);
+          doc.rect(cx, ry, cols[c], rowH);
+          cx += cols[c];
+        }
+        p = rows[i];
+        n = (hoja - 1) * MAX_ROWS_PER_SHEET + i + 1;
+        doc.text(String(n) + '.', colX[0] + cols[0] / 2, ry + 7, { align: 'center' });
+        if (p) {
+          doc.text(clip(doc, p.apellidoNombre || '', cols[1] - 2), colX[1] + 1, ry + 7);
+          doc.text(fmtDateBR(p.nacimiento), colX[2] + cols[2] / 2, ry + 7, { align: 'center' });
+          doc.text(clip(doc, p.nacionalidad || '', cols[3] - 2), colX[3] + cols[3] / 2, ry + 7, { align: 'center' });
+          doc.text(clip(doc, p.documento || '', cols[4] - 2), colX[4] + 1, ry + 7);
+          doc.text(p.visa === 'con' ? '' : 'X', colX[5] + cols[5] / 2, ry + 7, { align: 'center' });
+          doc.text(p.visa === 'con' ? 'X' : '', colX[6] + cols[6] / 2, ry + 7, { align: 'center' });
+        }
+      }
+
+      var sy = hy + 7 + MAX_ROWS_PER_SHEET * rowH + 8;
+      doc.setFontSize(7);
+      doc.rect(x + 3, sy, 62, 22);
+      doc.rect(x + 68, sy, 62, 22);
+      doc.rect(x + 133, sy, 61, 22);
+      doc.text('Responsable del Transporte', x + 5, sy + 4);
+      doc.text(state.guia.nombre || '', x + 5, sy + 10);
+      doc.text('FIRMA SUPERVISOR', x + 70, sy + 4);
+      doc.text('SELLO DE CONTROL', x + 135, sy + 4);
+    }
+
+    function clip(doc, text, widthMm) {
+      var t = String(text || '');
+      while (t.length > 3 && doc.getTextWidth(t) > widthMm) t = t.slice(0, -1);
+      return t;
+    }
+
+    /* ---------- Excel no layout da planilha original ---------- */
+    function generateExcel() {
+      if (typeof XLSX === 'undefined') {
+        alert('Biblioteca SheetJS não carregou.');
+        return;
+      }
+      var wb = XLSX.utils.book_new();
+      var aoa = [];
+      function pushForm(kind, startPaxIndex) {
+        var h = state.header;
+        var pax = filledPax();
+        aoa.push(['', 'MINISTERIO DEL INTERIOR-DIRECCIÓN NACIONAL DE MIGRACIONES']);
+        aoa.push(['HOJA Nº: 1 / 1', '', '', 'ANEXO I Resolución 2997/85', '', kind]);
+        aoa.push([]);
+        aoa.push(['MANIFIESTO DE TRIPULANTES Y PASAJEROS- EXCLUSIVO CORREDOR TURÍSTICO', '', '', '', '', 'Nº DE MANIFIESTO: ' + (h.nro || '')]);
+        aoa.push(['DEL: ' + (h.del || ''), '', '', 'PLACA : ' + (h.placa || '').toUpperCase()]);
+        aoa.push(['Medio de Transporte: ' + (h.medio || ''), '', '', 'Nación: ' + (h.nacion || ''), '', 'USO']);
+        aoa.push(['Con FECHA: ' + fmtDateBR(h.fecha), '', 'Por: ' + (h.por || ''), '', 'PASAJEROS: ' + pax.length, 'OFICIAL']);
+        aoa.push(['', '', 'Paso fronterizo: ' + (h.paso || ''), '', 'TRIPULANTE: ' + crewCount()]);
+        aoa.push(['CONSIGNADO A: ' + (h.consignado || '')]);
+        aoa.push([]);
+        aoa.push(['Nombre completo de la Empresa, Compañía y/o agencia propietaria, consignataria o exploradora del transporte']);
+        aoa.push(['GUIA', '', '', 'TRIPULACIÓN']);
+        aoa.push([state.guia.nombre || '', '', '', (state.tripulacion[0] && state.tripulacion[0].nombre) || '']);
+        aoa.push([state.guia.documento || '', '', '', (state.tripulacion[0] && state.tripulacion[0].documento) || '']);
+        aoa.push(['Apellido y nombre  Tipo y Nº de Documento', '', '', 'Apellido y nombre  Tipo y Nº de Documento', '', 'CALIFICACION']);
+        aoa.push(['PASAJEROS', '', '', '', '', 'MIGRATORIA']);
+        aoa.push(['Nº', 'Apellido y Nombre', 'Fecha de nacimiento', 'Nacionalidad', 'Tipo y Nº de documento', 'Sin Visa', 'Con Visa']);
+        var i, p;
+        for (i = 0; i < MAX_ROWS_PER_SHEET; i++) {
+          p = pax[startPaxIndex + i];
+          aoa.push([
+            (i + 1) + '.',
+            p ? p.apellidoNombre : '',
+            p ? fmtDateBR(p.nacimiento) : '',
+            p ? p.nacionalidad : '',
+            p ? p.documento : '',
+            p && p.visa !== 'con' ? 'X' : '',
+            p && p.visa === 'con' ? 'X' : ''
+          ]);
+        }
+        aoa.push(['Responsable del Transporte', '', 'FIRMA SUPERVISOR', '', '', 'SELLO DE CONTROL']);
+        aoa.push([state.guia.nombre || '']);
+        aoa.push([]);
+        aoa.push([]);
+      }
+
+      if (state.header.copias !== 'salida') pushForm('ENTRADA', 0);
+      if (state.header.copias !== 'entrada') pushForm('SALIDA', 0);
+
+      var ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = [
+        { wch: 14 }, { wch: 32 }, { wch: 22 }, { wch: 18 },
+        { wch: 26 }, { wch: 12 }, { wch: 12 }
+      ];
+      XLSX.utils.book_append_sheet(wb, ws, 'Hoja1');
+      XLSX.writeFile(wb, 'Manifiesto_Pasajeros_Argentina.xlsx');
+    }
+
+    /* ---------- Scanner / OCR (várias tentativas + conferência) ---------- */
+    function setScanStatus(msg) { $('scan-status').textContent = msg; }
+
+    function setScanBusy(on) {
+      ocrBusy = on;
+      var cap = $('scan-capture');
+      if (!cap) return;
+      cap.disabled = on;
+      cap.style.opacity = on ? '0.55' : '1';
+    }
+
+    function hideConfirm() {
+      pendingParsed = null;
+      $('scan-confirm').classList.add('hidden');
+    }
+
+    function showConfirm(parsed) {
+      pendingParsed = parsed;
+      $('cf-nombre').textContent = parsed.apellidoNombre || '—';
+      $('cf-nacim').textContent = parsed.nacimiento ? fmtDateBR(parsed.nacimiento) : '—';
+      $('cf-nacio').textContent = parsed.nacionalidad || '—';
+      $('cf-doc').textContent = (parsed.documento || '—');
+      $('cf-raw').textContent = (parsed.line1 || '') + '\n' + (parsed.line2 || '');
+      var checks = parsed.checks ? parsed.checks.slice() : [];
+      if (parsed.docCheckOk && parsed.birthCheckOk) {
+        checks.unshift('As duas linhas de baixo (MRZ) fecharam os dígitos de controle.');
+      } else {
+        if (!parsed.docCheckOk) checks.unshift('O número na MRZ não fechou o dígito de controle — conferi com a página.');
+        if (!parsed.birthCheckOk) checks.unshift('A data na MRZ não fechou o dígito de controle — conferi com a página.');
+      }
+      $('cf-note').textContent = checks.join(' ');
+      $('scan-confirm').classList.remove('hidden');
+      setScanStatus('Leitura pronta. Confira no passaporte antes de usar.');
+    }
+
+    function openScanner(targetId) {
+      scanTargetId = targetId || null;
+      $('scan-modal').classList.remove('hidden');
+      $('scan-manual').value = '';
+      hideConfirm();
+      startCamera();
+    }
+
+    function closeScanner() {
+      $('scan-modal').classList.add('hidden');
+      hideConfirm();
+      setScanBusy(false);
+      stopCamera();
+    }
+
+    function stopCamera() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(function (t) { t.stop(); });
+        mediaStream = null;
+      }
+      var v = $('scan-video');
+      v.srcObject = null;
+    }
+
+    function startCamera() {
+      stopCamera();
+      setScanStatus('Pedindo acesso à câmera…');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setScanStatus('Câmera ao vivo indisponível. Use “Galeria / Foto” (funciona no iPhone).');
+        return;
+      }
+      navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }
+      }).then(function (stream) {
+        mediaStream = stream;
+        var v = $('scan-video');
+        v.srcObject = stream;
+        v.play().catch(function () {});
+        setScanStatus('Enquadre a página de dados inteira (nome, foto e as duas linhas de baixo). A leitura leva alguns segundos.');
+      }).catch(function () {
+        setScanStatus('Permissão negada. Use “Galeria / Foto” para abrir a câmera do iPhone.');
+      });
+    }
+
+    function grabFrame(source) {
+      var w = source.videoWidth || source.naturalWidth || source.width;
+      var h = source.videoHeight || source.naturalHeight || source.height;
+      if (!w || !h) return null;
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      c.getContext('2d').drawImage(source, 0, 0, w, h);
+      return c;
+    }
+
+    function otsuThreshold(hist, total) {
+      var sum = 0, t;
+      for (t = 0; t < 256; t++) sum += t * hist[t];
+      var sumB = 0, wB = 0, max = 0, thresh = 140, wF, mB, mF, between;
+      for (t = 0; t < 256; t++) {
+        wB += hist[t];
+        if (!wB) continue;
+        wF = total - wB;
+        if (!wF) break;
+        sumB += t * hist[t];
+        mB = sumB / wB;
+        mF = (sum - sumB) / wF;
+        between = wB * wF * (mB - mF) * (mB - mF);
+        if (between > max) { max = between; thresh = t; }
+      }
+      return thresh;
+    }
+
+    function makeBand(frame, y0, y1, mode) {
+      var w = frame.width, h = frame.height;
+      var sx = Math.floor(w * 0.03);
+      var sy = Math.floor(h * y0);
+      var sw = Math.floor(w * 0.94);
+      var sh = Math.max(8, Math.floor(h * (y1 - y0)));
+      var targetW = (y1 - y0) > 0.45 ? 1280 : 1600;
+      var scale = Math.min(2.4, Math.max(1.3, targetW / sw));
+      var cw = Math.floor(sw * scale);
+      var ch = Math.floor(sh * scale);
+      var canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      var ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, cw, ch);
+      ctx.drawImage(frame, sx, sy, sw, sh, 0, 0, cw, ch);
+
+      var img = ctx.getImageData(0, 0, cw, ch);
+      var d = img.data, i, g, hist = new Array(256), n = cw * ch;
+      for (i = 0; i < 256; i++) hist[i] = 0;
+      var gray = new Uint8Array(n);
+      for (i = 0; i < n; i++) {
+        g = Math.round(0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]);
+        gray[i] = g;
+        hist[g]++;
+      }
+      var thr = otsuThreshold(hist, n);
+      if (mode === 'contrast') {
+        var min = 255, max = 0;
+        for (i = 0; i < n; i++) { if (gray[i] < min) min = gray[i]; if (gray[i] > max) max = gray[i]; }
+        var span = Math.max(1, max - min);
+        for (i = 0; i < n; i++) {
+          g = Math.round((gray[i] - min) * 255 / span);
+          d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = g;
+        }
+      } else {
+        var invert = mode === 'invert';
+        for (i = 0; i < n; i++) {
+          g = gray[i] > thr ? 255 : 0;
+          if (invert) g = 255 - g;
+          d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = g;
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+      return canvas;
+    }
+
+    function ensureWorker() {
+      if (tessWorker) return Promise.resolve(tessWorker);
+      if (tessWorkerPromise) return tessWorkerPromise;
+      if (typeof Tesseract === 'undefined') {
+        return Promise.reject(new Error('Tesseract.js não carregou. Abra a página com internet na primeira vez.'));
+      }
+      setScanStatus('Carregando o motor de leitura (só na primeira vez)…');
+      tessWorkerPromise = Tesseract.createWorker('eng', 1).then(function (w) {
+        tessWorker = w;
+        return w.setParameters({ user_defined_dpi: '300' }).then(function () { return w; });
+      });
+      return tessWorkerPromise;
+    }
+
+    function ocrWithPsm(canvas, psm, whitelist) {
+      var params = {
+        tessedit_pageseg_mode: String(psm),
+        tessedit_char_whitelist: whitelist || 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<'
+      };
+      return ensureWorker().then(function (w) {
+        return w.setParameters(params).then(function () {
+          return w.recognize(canvas);
+        }).then(function (res) {
+          return (res && res.data && res.data.text) || '';
+        });
+      });
+    }
+
+    function considerText(text, best) {
+      var list = collectTd3Candidates(text);
+      var i, c;
+      for (i = 0; i < list.length; i++) {
+        c = list[i];
+        if (!best || c.score > best.score) best = c;
+      }
+      return best;
+    }
+
+    function readMrzFromBottom(frame) {
+      var jobs = [
+        { y0: 0.70, y1: 0.99, mode: 'otsu', psm: '6', label: 'duas linhas de baixo' },
+        { y0: 0.62, y1: 0.96, mode: 'contrast', psm: '6', label: 'faixa da MRZ' },
+        { y0: 0.68, y1: 0.99, mode: 'invert', psm: '7', label: 'MRZ em contraste invertido' }
+      ];
+      var mrzChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<';
+
+      function step(i, best) {
+        if (i >= jobs.length) return Promise.resolve(best);
+        if (best && best.score >= 78 && best.docCheckOk && best.birthCheckOk && looksLikeName(best.apellidoNombre)) {
+          return Promise.resolve(best);
+        }
+        var job = jobs[i];
+        setScanStatus('Lendo as duas linhas de baixo (' + (i + 1) + '/' + jobs.length + ')…');
+        var band = makeBand(frame, job.y0, job.y1, job.mode);
+        return ocrWithPsm(band, job.psm, mrzChars).then(function (text) {
+          return step(i + 1, considerText(text, best));
+        }).catch(function () {
+          return step(i + 1, best);
+        });
+      }
+      return step(0, null);
+    }
+
+    function readVizPage(frame) {
+      var vizChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 /.-:';
+      setScanStatus('Agora conferindo nome, data e número no restante da página…');
+      var band = makeBand(frame, 0.02, 0.74, 'contrast');
+      return ocrWithPsm(band, '4', vizChars).then(function (text) {
+        if (text && text.replace(/\s/g, '').length > 20) return text;
+        setScanStatus('A página veio fraca; tentando outro contraste…');
+        var band2 = makeBand(frame, 0.02, 0.78, 'otsu');
+        return ocrWithPsm(band2, '6', vizChars);
+      });
+    }
+
+    function readPassportCarefully(frame) {
+      return ensureWorker().then(function () {
+        return readMrzFromBottom(frame);
+      }).then(function (mrz) {
+        if (!mrz || mrz.score < 40) return null;
+        return readVizPage(frame).then(function (vizText) {
+          var viz = parseVIZ(vizText || '', mrz);
+          return mergeMrzAndViz(mrz, viz);
+        }).catch(function () {
+          mrz.checks = ['A página não pôde ser lida; usei só as duas linhas de baixo.'];
+          return mrz;
+        });
+      }).then(function (best) {
+        if (!best) return null;
+        if (best.score >= 48 && (looksLikeName(best.apellidoNombre) || best.documento)) return best;
+        if (best.score >= 60) return best;
+        return null;
+      });
+    }
+
+    function applyParsed(parsed) {
+      if (!parsed) {
+        setScanStatus('Não consegui uma leitura confiável. Aproxime das duas linhas de baixo, com boa luz, ou cole a MRZ.');
+        return;
+      }
+      var payload = {
+        apellidoNombre: (parsed.apellidoNombre || '').toUpperCase(),
+        nacimiento: parsed.nacimiento || '',
+        nacionalidad: parsed.nacionalidad || '',
+        documento: ('PASAPORTE ' + (parsed.documento || '')).trim(),
+        visa: 'sin'
+      };
+      if (scanTargetId) {
+        var found = state.pasajeros.filter(function (p) { return p.id === scanTargetId; })[0];
+        if (found) Object.assign(found, payload);
+      } else {
+        payload.id = uid();
+        state.pasajeros.push(payload);
+      }
+      saveState();
+      renderPax();
+      closeScanner();
+    }
+
+    function processSource(source) {
+      if (ocrBusy) return;
+      hideConfirm();
+      setScanBusy(true);
+      setScanStatus('Congelando o quadro: primeiro as duas linhas de baixo, depois a página…');
+      var frame = grabFrame(source);
+      if (!frame) {
+        setScanBusy(false);
+        setScanStatus('Não foi possível capturar o quadro.');
+        return;
+      }
+      readPassportCarefully(frame).then(function (result) {
+        setScanBusy(false);
+        if (!result) {
+          setScanStatus('Não consegui ler com segurança. Enquadre a página inteira, com as duas linhas de baixo nítidas, e tente de novo.');
+          return;
+        }
+        showConfirm(result);
+      }).catch(function (err) {
+        setScanBusy(false);
+        setScanStatus((err && err.message) || 'Falha no OCR. Tente de novo ou cole as duas linhas da MRZ.');
+      });
+    }
+
+    function readFileToImage(file) {
+      if (window.createImageBitmap) {
+        return createImageBitmap(file, { imageOrientation: 'from-image' }).then(function (bmp) {
+          var c = document.createElement('canvas');
+          c.width = bmp.width;
+          c.height = bmp.height;
+          c.getContext('2d').drawImage(bmp, 0, 0);
+          if (bmp.close) bmp.close();
+          return c;
+        });
+      }
+      return new Promise(function (resolve, reject) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
+    /* ---------- eventos ---------- */
+    function onAppClick(ev) {
+      var t = ev.target;
+      if (t.dataset.del) {
+        state.pasajeros = state.pasajeros.filter(function (p) { return p.id !== t.dataset.del; });
+        saveState(); renderPax();
+      }
+      if (t.dataset.scan) openScanner(t.dataset.scan);
+      if (t.dataset.delCrew) {
+        state.tripulacion = state.tripulacion.filter(function (c) { return c.id !== t.dataset.delCrew; });
+        saveState(); renderCrew();
+      }
+    }
+
+    function onAppInput(ev) {
+      var t = ev.target;
+      if (t.dataset.pax) {
+        state.pasajeros.forEach(function (p) {
+          if (p.id === t.dataset.pax) p[t.dataset.field] = t.value;
+        });
+        saveState();
+      }
+      if (t.dataset.crew) {
+        state.tripulacion.forEach(function (c) {
+          if (c.id === t.dataset.crew) c[t.dataset.field] = t.value;
+        });
+        saveState();
+      }
+    }
+
+    function init() {
+      bindHeader();
+      renderCrew();
+      renderPax();
+
+      $('btn-add-pax').onclick = function () {
+        state.pasajeros.push({
+          id: uid(), apellidoNombre: '', nacimiento: '', nacionalidad: 'BRASILEÑA',
+          documento: 'PASAPORTE ', visa: 'sin'
+        });
+        saveState(); renderPax();
+      };
+      $('btn-add-crew').onclick = function () {
+        state.tripulacion.push({ id: uid(), nombre: '', documento: '' });
+        saveState(); renderCrew();
+      };
+      $('btn-scan-new').onclick = function () { openScanner(null); };
+      $('scan-close').onclick = closeScanner;
+      $('scan-capture').onclick = function () {
+        var v = $('scan-video');
+        if (!v.videoWidth) {
+          setScanStatus('Câmera ainda não está pronta. Use Galeria / Foto.');
+          return;
+        }
+        processSource(v);
+      };
+      $('scan-file').onchange = function (ev) {
+        var file = ev.target.files && ev.target.files[0];
+        ev.target.value = '';
+        if (!file) return;
+        setScanStatus('Abrindo foto…');
+        readFileToImage(file).then(processSource).catch(function () {
+          setScanStatus('Não foi possível abrir a imagem.');
+        });
+      };
+      $('scan-parse-manual').onclick = function () {
+        var parsed = extractMRZFromText($('scan-manual').value);
+        if (!parsed || parsed.score < 40) {
+          setScanStatus('Esse texto não parece uma MRZ válida. Cole as duas linhas da parte de baixo do passaporte, sem espaços.');
+          return;
+        }
+        showConfirm(parsed);
+      };
+      $('scan-accept').onclick = function () {
+        if (pendingParsed) applyParsed(pendingParsed);
+      };
+      $('scan-retry').onclick = function () {
+        hideConfirm();
+        setScanStatus('Pode capturar de novo. Enquadre só as duas linhas de baixo, bem nítidas.');
+      };
+
+      $('btn-print').onclick = function () {
+        syncPrintRoot();
+        document.body.classList.add('is-printing');
+        setTimeout(function () { window.print(); }, 50);
+      };
+      window.addEventListener('afterprint', function () {
+        document.body.classList.remove('is-printing');
+      });
+      $('btn-pdf').onclick = generateOfficialPdf;
+      $('btn-xlsx').onclick = generateExcel;
+
+      document.addEventListener('click', onAppClick);
+      document.addEventListener('input', onAppInput);
+      document.addEventListener('change', onAppInput);
+      if (window.matchMedia) {
+        window.matchMedia('print').addEventListener('change', function (e) {
+          if (!e.matches) document.body.classList.remove('is-printing');
+        });
+      }
+      syncPrintRoot();
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+  })();
+  </script>
+</body>
+</html>
