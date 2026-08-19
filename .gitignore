@@ -1,0 +1,6 @@
+.DS_Store
+*.zip
+.agent-tools/
+node_modules/
+.pydeps/
+package-lock.json
