@@ -22,11 +22,8 @@
     };
   </script>
 
-  <!-- PDF, Excel e captura visual (CDNs pedidas) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <!-- Excel (CFB) + OCR da zona MRZ do passaporte -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- OCR da zona MRZ do passaporte -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
@@ -35,118 +32,6 @@
     /* iOS: evita zoom ao focar inputs */
     input, select, textarea, button { font-size: 16px; }
     .safe-bottom { padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)); }
-
-    /* ========== DOCUMENTO OFICIAL (tela de preview + impressão A4) ========== */
-    .official-sheet {
-      width: 210mm;
-      min-height: 297mm;
-      background: #fff;
-      color: #000;
-      font-family: Arial, Helvetica, sans-serif;
-      box-sizing: border-box;
-      padding: 8mm 8mm 10mm;
-      page-break-after: always;
-    }
-    .official-sheet:last-child { page-break-after: auto; }
-
-    .of-box { border: 1.4px solid #000; }
-    .of-inner { border: 0.6px solid #000; }
-    .of-tiny { font-size: 8px; line-height: 1.15; }
-    .of-sm { font-size: 9px; line-height: 1.2; }
-    .of-md { font-size: 11px; }
-    .of-title {
-      font-size: 13px;
-      font-weight: 800;
-      letter-spacing: 0.2px;
-      text-align: center;
-      text-transform: uppercase;
-    }
-    .of-stamp {
-      font-family: "Arial Black", Arial, sans-serif;
-      font-size: 22px;
-      font-weight: 900;
-      letter-spacing: 1px;
-      line-height: 1;
-    }
-    .of-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-    .of-table th, .of-table td {
-      border: 1px solid #000;
-      padding: 2px 4px;
-      vertical-align: middle;
-    }
-    .of-table th {
-      font-size: 8px;
-      font-weight: 700;
-      text-align: center;
-      background: #f3f3f3;
-    }
-    .of-table td { font-size: 10px; height: 28px; }
-    .of-sign {
-      height: 58px;
-      border: 1px solid #000;
-      font-size: 8px;
-      padding: 4px;
-    }
-
-    /* Grid 8 colunas — espelha Hoja1 do .xls original */
-    .excel-grid {
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      font-size: 8px;
-      line-height: 1.15;
-    }
-    .excel-grid td {
-      border: 0.5px solid #000;
-      padding: 1px 3px;
-      vertical-align: middle;
-      word-wrap: break-word;
-    }
-    .excel-grid .of-stamp-cell {
-      font-family: "Arial Black", Arial, sans-serif;
-      font-size: 18px;
-      font-weight: 900;
-      text-align: center;
-      vertical-align: middle;
-    }
-    .excel-grid .of-spacer td,
-    .excel-grid td.of-spacer { height: 10px; border-color: transparent; }
-    .excel-grid .of-gap-row td { height: 8px; border: none; }
-    .official-sheet--full { min-height: auto; page-break-after: auto; }
-    .of-sheet-gap { height: 12mm; }
-
-    @page { size: A4 portrait; margin: 0; }
-
-    @media print {
-      html, body {
-        background: #fff !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .no-print { display: none !important; }
-      #print-root { display: block !important; }
-      .official-sheet {
-        box-shadow: none !important;
-        margin: 0 !important;
-        width: 210mm;
-        min-height: 297mm;
-      }
-    }
-
-    /* Fora da impressão o documento oficial fica fora da tela (não display:none:
-       o Safari iOS ignora @media print em nós que estavam display:none). */
-    @media screen {
-      body:not(.is-printing) #print-root {
-        position: absolute;
-        left: -12000px;
-        top: 0;
-        width: 210mm;
-      }
-      body.is-printing #app { display: none !important; }
-      body.is-printing #print-root { position: static; left: auto; }
-    }
 
     /* Guia visual da câmera (faixa da MRZ) */
     .page-guide {
@@ -169,7 +54,7 @@
 <body class="text-slate-800">
 
   <!-- ===================== INTERFACE MOBILE ===================== -->
-  <div id="app" class="no-print min-h-screen">
+  <div id="app" class="min-h-screen">
     <header class="sticky top-0 z-30 bg-navy-800 text-white px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 shadow">
       <p class="text-[10px] uppercase tracking-[0.18em] text-white/70">Dirección Nacional de Migraciones</p>
       <h1 class="text-lg font-semibold leading-tight">Manifiesto de Pasajeros</h1>
@@ -215,13 +100,6 @@
           <label class="col-span-2 text-xs font-medium">Consignado a (empresa / agencia)
             <input id="f-consignado" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2" />
           </label>
-          <label class="col-span-2 text-xs font-medium">Cópias a gerar
-            <select id="f-copias" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 bg-white">
-              <option value="ambos">ENTRADA + SALIDA (corredor turístico)</option>
-              <option value="entrada">Só ENTRADA</option>
-              <option value="salida">Só SALIDA</option>
-            </select>
-          </label>
         </div>
       </section>
 
@@ -261,20 +139,15 @@
       </section>
 
       <section class="bg-white rounded-2xl p-4 border border-slate-200 space-y-2">
-        <h2 class="text-sm font-semibold text-navy-800">Saídas</h2>
-        <button type="button" id="btn-print" class="w-full rounded-xl bg-navy-800 text-white py-3 font-semibold">Gerar Documento para Impressão</button>
-        <button type="button" id="btn-pdf" class="w-full rounded-xl bg-white border border-navy-700 text-navy-800 py-3 font-semibold">Gerar PDF Oficial</button>
-        <button type="button" id="btn-xlsx" class="w-full rounded-xl bg-white border border-slate-300 py-3 font-semibold">Exportar Excel (.xls)</button>
-        <p class="text-[11px] text-slate-500">No iPhone: Impressão abre o diálogo do Safari (AirPrint ou “Salvar em PDF”). Os arquivos PDF/Excel são baixados localmente, sem servidor.</p>
+        <h2 class="text-sm font-semibold text-navy-800">Exportar</h2>
+        <button type="button" id="btn-xlsx" class="w-full rounded-xl bg-navy-800 text-white py-3 font-semibold">Baixar Excel (.xls)</button>
+        <p class="text-[11px] text-slate-500">Baixa o mesmo arquivo original preenchido (LISTA DE PASSAGEIROS PRA ARGENTINA.xls), com ENTRADA e SALIDA. Sem PDF.</p>
       </section>
     </main>
   </div>
 
-  <!-- ===================== DOCUMENTO OFICIAL (impressão A4) ===================== -->
-  <div id="print-root"></div>
-
   <!-- ===================== MODAL SCANNER MRZ ===================== -->
-  <div id="scan-modal" class="no-print hidden fixed inset-0 z-50 bg-black/80 text-white">
+  <div id="scan-modal" class="hidden fixed inset-0 z-50 bg-black/80 text-white">
     <div class="flex flex-col h-full">
       <div class="px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-2 flex items-center justify-between">
         <h3 class="font-semibold">Leitura do passaporte</h3>
@@ -295,8 +168,8 @@
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <p class="text-[11px] uppercase tracking-wide text-slate-500">Nascimento</p>
-                <p id="cf-nacim" class="font-semibold"></p>
+                <p class="text-[11px] uppercase tracking-wide text-slate-500">Fecha de nacimiento</p>
+                <input id="cf-nacim" type="date" class="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 font-semibold text-slate-900 bg-white" />
               </div>
               <div>
                 <p class="text-[11px] uppercase tracking-wide text-slate-500">Nacionalidad</p>
@@ -341,7 +214,7 @@
   /**
    * Manifiesto de Pasajeros — SPA local (sem backend).
    * Lê a zona MRZ (ICAO 9303 / TD3) do passaporte, preenche a lista e
-   * gera o Anexo I (Resolución 2997/85) para impressão, PDF e Excel.
+   * gera o Anexo I (Resolución 2997/85) preenchendo o .xls original.
    */
   (function () {
     'use strict';
@@ -384,6 +257,22 @@
       '<': ['K', 'C', 'X', '|'], '|': ['<', 'I', '1']
     };
     var MRZ_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<';
+    /* Letras que o OCR mistura com dígitos no campo YYMMDD da MRZ */
+    var BIRTH_DIGIT_OCR = {
+      O: '0', D: '0', Q: '0', U: '0',
+      I: '1', L: '1', T: '1',
+      Z: '2',
+      A: '4',
+      S: '5',
+      G: '6', C: '6',
+      B: '8', E: '8'
+    };
+
+    function normalizeBirthDigits(field) {
+      return String(field || '').toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/[A-Z]/g, function (ch) {
+        return BIRTH_DIGIT_OCR[ch] || ch;
+      }).slice(0, 6);
+    }
 
     var state = loadState() || defaultState();
     var scanTargetId = null; // null = novo passageiro
@@ -413,8 +302,7 @@
           hojaTotal: 1,
           del: '',
           por: '',
-          consignado: '',
-          copias: 'ambos'
+          consignado: ''
         },
         guia: {
           nombre: GUIDE_NAME,
@@ -450,24 +338,57 @@
     }
 
     function fmtDateBR(iso) {
-      if (!iso) return '';
-      var p = String(iso).slice(0, 10).split('-');
-      if (p.length !== 3) return iso;
+      if (iso == null || iso === '') return '';
+      var s = String(iso).trim();
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+      if (/^[A-Z0-9]{6}$/i.test(s)) {
+        var fromMrz = yymmddToIso(s);
+        if (fromMrz) s = fromMrz;
+      }
+      var p = s.slice(0, 10).split('-');
+      if (p.length !== 3 || p[0].length !== 4) return s;
+      if (!p[1] || !p[2]) return s;
       return p[2] + '/' + p[1] + '/' + p[0];
     }
 
     function yymmddToIso(yymmdd) {
-      if (!/^\d{6}$/.test(yymmdd)) return '';
-      var yy = parseInt(yymmdd.slice(0, 2), 10);
-      var mm = parseInt(yymmdd.slice(2, 4), 10);
-      var dd = parseInt(yymmdd.slice(4, 6), 10);
+      var raw = normalizeBirthDigits(yymmdd);
+      if (!/^\d{6}$/.test(raw)) return '';
+      var yy = parseInt(raw.slice(0, 2), 10);
+      var mm = parseInt(raw.slice(2, 4), 10);
+      var dd = parseInt(raw.slice(4, 6), 10);
       if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return '';
-      var now = new Date().getFullYear();
+      var today = new Date();
+      var nowY = today.getFullYear();
       var year = 2000 + yy;
-      if (year > now) year = 1900 + yy;
+      if (year > nowY) year = 1900 + yy;
       var mmS = (mm < 10 ? '0' : '') + mm;
       var ddS = (dd < 10 ? '0' : '') + dd;
-      return year + '-' + mmS + '-' + ddS;
+      var iso = year + '-' + mmS + '-' + ddS;
+      if (!isValidIsoDate(iso)) return '';
+      var born = new Date(year, mm - 1, dd);
+      var endToday = new Date(nowY, today.getMonth(), today.getDate());
+      if (born > endToday) {
+        iso = (year - 100) + '-' + mmS + '-' + ddS;
+        if (!isValidIsoDate(iso)) return '';
+        year -= 100;
+        born = new Date(year, mm - 1, dd);
+        if (born > endToday) return '';
+      }
+      if (nowY - year > 120) return '';
+      return iso;
+    }
+
+    function toStoredNacimiento(val) {
+      if (val == null || val === '') return '';
+      var s = String(val).trim();
+      if (isValidIsoDate(s.slice(0, 10))) return s.slice(0, 10);
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) {
+        var p = s.split('/');
+        var iso = p[2] + '-' + p[1] + '-' + p[0];
+        return isValidIsoDate(iso) ? iso : '';
+      }
+      return yymmddToIso(s);
     }
 
     function isValidIsoDate(iso) {
@@ -535,6 +456,45 @@
       return field;
     }
 
+    function birthFieldValid(field, check) {
+      return /^\d{6}$/.test(field) && !!yymmddToIso(field) && mrzCheck(field, check);
+    }
+
+    /* Campo de nascimento da TD3: sempre 6 dígitos. Repara OCR e, se o
+       dígito verificador falhar, ainda devolve YYMMDD se a data for plausível. */
+    function repairBirthField(field, check) {
+      var digits = normalizeBirthDigits(field);
+      var checkCh = String(check || '');
+      var checkDigit = /[0-9]/.test(checkCh) ? checkCh : (BIRTH_DIGIT_OCR[checkCh] || checkCh);
+      var repaired, i, d, trial, a, alts, trialCheck;
+
+      if (birthFieldValid(digits, checkDigit)) return digits;
+
+      repaired = normalizeBirthDigits(repairCheckedField(digits, checkDigit));
+      if (birthFieldValid(repaired, checkDigit)) return repaired;
+      repaired = normalizeBirthDigits(repairCheckedField(String(field || ''), checkCh));
+      if (birthFieldValid(repaired, checkDigit) || birthFieldValid(repaired, checkCh)) return repaired;
+
+      alts = (CONFUSION[checkCh] || []).concat(CONFUSION[checkDigit] || []);
+      for (a = 0; a < alts.length; a++) {
+        trialCheck = /[0-9]/.test(alts[a]) ? alts[a] : (BIRTH_DIGIT_OCR[alts[a]] || alts[a]);
+        if (birthFieldValid(digits, trialCheck)) return digits;
+        repaired = normalizeBirthDigits(repairCheckedField(digits, trialCheck));
+        if (birthFieldValid(repaired, trialCheck)) return repaired;
+      }
+
+      if (/^\d{6}$/.test(digits) && /^\d$/.test(checkDigit)) {
+        for (i = 0; i < 6; i++) {
+          for (d = 0; d <= 9; d++) {
+            trial = digits.slice(0, i) + String(d) + digits.slice(i + 1);
+            if (birthFieldValid(trial, checkDigit)) return trial;
+          }
+        }
+      }
+
+      return /^\d{6}$/.test(digits) ? digits : String(field || '').slice(0, 6);
+    }
+
     function softenFillers(s) {
       return String(s || '').replace(/[KCX]{3,}/g, function (m) {
         return new Array(m.length + 1).join('<');
@@ -551,8 +511,8 @@
 
     function sanitizeMrzOcrText(raw) {
       return normalizeMrzText(raw)
-        .replace(/([A-Z0-9])I([A-Z0-9])/g, '$1<$2')
-        .replace(/([A-Z0-9])L([A-Z0-9])/g, '$1<$2');
+        .replace(/([A-Z])I([A-Z])/g, '$1<$2')
+        .replace(/([A-Z])L([A-Z])/g, '$1<$2');
     }
 
     function repairLine2Fuzzy(line2) {
@@ -560,10 +520,11 @@
       if (line2.length < 38) return line2;
       line2 = (line2 + '<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<').slice(0, 44);
       var doc = repairCheckedField(line2.slice(0, 9), line2[9]);
-      var birth = repairCheckedField(line2.slice(14, 20), line2[20]);
-      var expiry = repairCheckedField(line2.slice(22, 28), line2[28]);
-      return doc + line2[9] + line2.slice(10, 14) + birth + line2[20] + line2[21] +
-        expiry + line2.slice(28);
+      /* TD3 1-based: 14–19 nascimento, 20 check, 21 sexo, 22–27 validade, 28 check */
+      var birth = repairBirthField(line2.slice(13, 19), line2[19]);
+      var expiry = repairCheckedField(line2.slice(21, 27), line2[27]);
+      return doc + line2[9] + line2.slice(10, 13) + birth + line2[19] + line2[20] +
+        expiry + line2.slice(27);
     }
 
     function repairLine1Fuzzy(line1) {
@@ -636,16 +597,23 @@
       var docField = repairCheckedField(line2.slice(0, 9), line2[9]);
       var docNum = docField.replace(/</g, '');
       var nationality = repairNat(line2.slice(10, 13));
-      var birthField = repairCheckedField(line2.slice(14, 20), line2[20]);
+      /* TD3 1-based 14–19 YYMMDD, 20 check → 0-based slice(13,19) + [19] */
+      var birthCheckCh = line2[19];
+      var birthField = repairBirthField(line2.slice(13, 19), birthCheckCh);
       var birth = yymmddToIso(birthField);
-      var sex = line2[21];
+      var birthCheckOk = mrzCheck(birthField, birthCheckCh);
+      if (!birthCheckOk) {
+        var birthCheckDigit = /[0-9]/.test(birthCheckCh) ? birthCheckCh : (BIRTH_DIGIT_OCR[birthCheckCh] || birthCheckCh);
+        birthCheckOk = mrzCheck(birthField, birthCheckDigit);
+      }
+      var sex = line2[20];
       if (sex !== 'M' && sex !== 'F' && sex !== '<') {
         if (sex === 'H' || sex === 'N') sex = 'M';
         else if (sex === 'E' || sex === 'P') sex = 'F';
       }
-      var expiryField = repairCheckedField(line2.slice(22, 28), line2[28]);
-      var optional = line2.slice(29, 42);
-      var compositeSrc = docField + line2[9] + birthField + line2[20] + expiryField + line2[28] + optional;
+      var expiryField = repairCheckedField(line2.slice(21, 27), line2[27]);
+      var optional = line2.slice(28, 43);
+      var compositeSrc = docField + line2[9] + birthField + line2[19] + expiryField + line2[27] + optional;
       var compositeOk = mrzCheck(compositeSrc, line2[43]);
 
       var parsed = {
@@ -660,8 +628,8 @@
         nacimiento: birth,
         sexo: sex === 'F' ? 'F' : (sex === 'M' ? 'M' : ''),
         docCheckOk: mrzCheck(docField, line2[9]),
-        birthCheckOk: mrzCheck(birthField, line2[20]),
-        expiryCheckOk: mrzCheck(expiryField, line2[28]),
+        birthCheckOk: birthCheckOk,
+        expiryCheckOk: mrzCheck(expiryField, line2[27]),
         compositeOk: compositeOk,
         line1: line1,
         line2: line2
@@ -783,7 +751,29 @@
         iso = toIsoParts(m[1], MONTHS[m[2]], m[3]);
         if (iso && out.indexOf(iso) < 0) out.push(iso);
       }
+      var re3 = /(\d{4})\s*[\.\/\-]\s*(\d{1,2})\s*[\.\/\-]\s*(\d{1,2})/g;
+      while ((m = re3.exec(u))) {
+        iso = toIsoParts(m[3], m[2], m[1]);
+        if (iso && out.indexOf(iso) < 0) out.push(iso);
+      }
       return out;
+    }
+
+    function dateNearBirthLabel(text) {
+      var u = String(text || '').toUpperCase();
+      var labels = [
+        'DATE OF BIRTH', 'FECHA DE NACIMIENTO', 'DATA DE NASCIMENTO',
+        'DATE/PLACE OF BIRTH', 'DATE / PLACE OF BIRTH', 'NASCIMENTO', 'BIRTH'
+      ];
+      var i, idx, rest, dates;
+      for (i = 0; i < labels.length; i++) {
+        idx = u.indexOf(labels[i]);
+        if (idx < 0) continue;
+        rest = u.slice(idx, idx + 90);
+        dates = datesFromViz(rest);
+        if (dates.length) return dates[0];
+      }
+      return '';
     }
 
     function afterLabel(text, labels) {
@@ -823,14 +813,17 @@
       }
 
       dates = datesFromViz(u);
-      if (mrz && mrz.nacimiento && dates.indexOf(mrz.nacimiento) >= 0) {
+      var labeled = dateNearBirthLabel(u);
+      if (labeled) {
+        viz.nacimiento = labeled;
+      } else if (mrz && mrz.nacimiento && dates.indexOf(mrz.nacimiento) >= 0) {
         viz.nacimiento = mrz.nacimiento;
       } else if (dates.length) {
         for (i = 0; i < dates.length; i++) {
           iso = dates[i];
           var year = parseInt(iso.slice(0, 4), 10);
           var age = new Date().getFullYear() - year;
-          if (age >= 1 && age <= 100) { viz.nacimiento = iso; break; }
+          if (age >= 0 && age <= 100) { viz.nacimiento = iso; break; }
         }
       }
 
@@ -879,11 +872,15 @@
       if (viz.nacimiento && viz.nacimiento === mrz.nacimiento) {
         mrz.score += 8;
         mrz.checks.push('Data de nascimento igual na MRZ e na página.');
-      } else if (viz.nacimiento && viz.nacimiento !== mrz.nacimiento) {
-        if (!mrz.birthCheckOk && isValidIsoDate(viz.nacimiento)) {
+      } else if (viz.nacimiento && isValidIsoDate(viz.nacimiento) && viz.nacimiento !== mrz.nacimiento) {
+        var prevBirth = mrz.nacimiento;
+        if (!prevBirth || !mrz.birthCheckOk) {
           mrz.nacimiento = viz.nacimiento;
-          mrz.checks.push('A data da MRZ não fechou o dígito; usei a data impressa na página.');
-        } else if (mrz.nacimiento) {
+          mrz.score += 6;
+          mrz.checks.push(!prevBirth
+            ? 'A MRZ não trouxe data; usei a data impressa na página.'
+            : 'A data da MRZ não fechou o dígito; usei a data impressa na página.');
+        } else {
           mrz.checks.push('A página mostrou outra data (' + fmtDateBR(viz.nacimiento) + '); mantive a da MRZ.');
         }
       }
@@ -926,8 +923,7 @@
         'f-medio': 'medio', 'f-placa': 'placa', 'f-nacion': 'nacion',
         'f-paso': 'paso', 'f-fecha': 'fecha', 'f-nro': 'nro',
         'f-hoja': 'hoja', 'f-hoja-total': 'hojaTotal',
-        'f-del': 'del', 'f-por': 'por', 'f-consignado': 'consignado',
-        'f-copias': 'copias'
+        'f-del': 'del', 'f-por': 'por', 'f-consignado': 'consignado'
       };
       Object.keys(map).forEach(function (id) {
         var el = $(id);
@@ -1005,11 +1001,7 @@
       return state.pasajeros.filter(function (p) { return (p.apellidoNombre || '').trim(); });
     }
 
-    /* ---------- Documento oficial = layout idêntico ao .xls (Hoja1, 8 colunas) ---------- */
-    function paxRowsForKind(kind) {
-      return kind === 'SALIDA' ? PAX_ROWS_SALIDA : PAX_ROWS_ENTRADA;
-    }
-
+    /* ---------- Excel: patch in-place do .xls original (Hoja1, 8 colunas) ---------- */
     function guiaDocLine() {
       var g = state.guia;
       return [(g.nombre || ''), (g.documento || '')].filter(function (s) { return s.trim(); }).join('  ');
@@ -1128,173 +1120,6 @@
       });
     }
 
-    var EXCEL_COLGROUP =
-      '<colgroup><col style="width:4%"/><col style="width:34%"/><col style="width:15%"/>' +
-      '<col style="width:14%"/><col style="width:17%"/><col style="width:5%"/>' +
-      '<col style="width:7%"/><col style="width:4%"/></colgroup>';
-
-    function td(txt, opts) {
-      opts = opts || {};
-      var cs = opts.cs ? ' colspan="' + opts.cs + '"' : '';
-      var rs = opts.rs ? ' rowspan="' + opts.rs + '"' : '';
-      var al = opts.center ? ' style="text-align:center"' : '';
-      var cl = opts.cls ? ' class="' + opts.cls + '"' : '';
-      return '<td' + cs + rs + al + cl + '>' + escapeHtml(txt || '') + '</td>';
-    }
-
-    function blockRowsHtml(kind, paxSlice) {
-      var h = state.header;
-      var sal = kind === 'SALIDA';
-      var nRows = paxRowsForKind(kind);
-      var hn = h.hoja || 1, ht = h.hojaTotal || 1;
-      var fecha = fmtDateBR(h.fecha);
-      var paxN = filledPax().length;
-      var rows = '', i, p;
-
-      if (sal) {
-        rows += '<tr>' + td('') + td('MINISTERIO DEL INTERIOR-DIRECCIÓN NACIONAL DE MIGRACIONES ', { cs: 7 }) + '</tr>';
-      } else {
-        rows += '<tr>' + td('') + td('MINISTERIO DEL INTERIOR-DIRECCIÓN NACIONAL DE MIGRACIONES ', { cs: 7 }) + '</tr>';
-      }
-      rows += '<tr>' + td('HOJA Nº: ' + hn + '         / ' + ht, { cs: 2 }) + td('') +
-        td('       ANEXO I Resolución 2997/85', { cs: 2 }) + td(kind, { cs: 2, cls: 'of-stamp-cell' }) + td('') + '</tr>';
-      rows += '<tr>' + td('', { cs: 8 }) + '</tr>';
-      rows += '<tr>' + td('MANIFIESTO DE TRIPULANTES Y PASAJEROS- EXCLUSIVO CORREDOR TURÍSTICO', { cs: 5 }) +
-        td('') + td('Nº DE MANIFIESTO: ' + (h.nro || ''), { cs: 2 }) + '</tr>';
-      rows += '<tr>' + td('DEL: ' + (h.del || '')) + td('') + td('') +
-        td('PLACA : ' + (h.placa || '').toUpperCase(), { cs: 2 }) + td('') + td('') + td('') + '</tr>';
-      if (sal) {
-        rows += '<tr>' + td('Medio de Transporte: ' + (h.medio || '')) + td('') + td('') +
-          td('Nación:  ' + (h.nacion || ''), { cs: 2 }) + td('          USO', { cs: 3 }) + '</tr>';
-        rows += '<tr>' + td('Con FECHA: ' + fecha) + td('') + td('Por: ' + (h.por || '')) + td('') +
-          td('PASSAGEIROS:' + paxN) + td('          OFICIAL', { cs: 3 }) + '</tr>';
-        rows += '<tr>' + td('') + td('') + td('Paso fronterizo') + td(h.paso || '') +
-          td('TRIPULANTE: ' + crewCount(), { cs: 4 }) + '</tr>';
-      } else {
-        rows += '<tr>' + td('Medio de Transporte:' + (h.medio || '')) + td('') + td('') +
-          td('Nación: ' + (h.nacion || ''), { cs: 2 }) + td('          USO', { cs: 3 }) + '</tr>';
-        rows += '<tr>' + td('Con FECHA ' + fecha) + td('') + td('Por: ' + (h.por || '')) + td('') +
-          td('PASSAGEIROS: ' + paxN) + td('          OFICIAL', { cs: 3 }) + '</tr>';
-        rows += '<tr>' + td('') + td('') + td('Paso fronterizo') + td('') +
-          td('TRIPULANTE: ' + crewCount(), { cs: 4 }) + '</tr>';
-      }
-      rows += '<tr>' + td('CONSIGNADO A: ' + (h.consignado || ''), { cs: 8 }) + '</tr>';
-      rows += '<tr>' + td('', { cs: 8 }) + '</tr>';
-      rows += '<tr>' + td('') +
-        td('Nombre completop de la Empresa, Compania y/o agencia propietaria, consignataria o exploradora del transporte', { cs: 7 }) + '</tr>';
-      rows += '<tr>' + td('GUIA', { cs: 3 }) + td('TRIPULAÇÃO', { cs: 2 }) + td('') + td('') + td('') + td('') + '</tr>';
-      rows += '<tr>' + td(guiaDocLine(), { cs: 2 }) + td('') +
-        td(tripDocLine(), { cs: 3 }) + td('') +
-        td('CALIFICACION', { center: true }) + td('') + td('') + '</tr>';
-      rows += '<tr>' + td('', { cs: 2 }) + td('') + td('', { cs: 3 }) + td('') + td('') + td('') + td('') + '</tr>';
-      rows += '<tr>' + td('Apellido y nombre  Tipo y Nº de Documento', { cs: 3 }) +
-        td('Apellido y nombre  Tipo y Nº de Documento', { cs: 3 }) + td('') + td('') + td('') + td('') + '</tr>';
-      rows += '<tr>' + td('                                                  PASAJEROS ', { cs: 5 }) +
-        td('MIGRATORIA', { cs: 3, center: true }) + '</tr>';
-      rows += '<tr>' + td('Nº', { center: true }) + td(' Apellido y Nombre') +
-        td('Fecha de nacimiento', { center: true }) + td('Nacionalidad', { center: true }) +
-        td('Tipo y Nº de documento') + td('Sin Visa', { center: true }) +
-        td('Con Visa', { center: true }) + td('') + '</tr>';
-
-      for (i = 0; i < nRows; i++) {
-        p = paxSlice[i];
-        rows += '<tr>' +
-          td(paxNumLabel(kind, i), { center: true }) +
-          td(p ? p.apellidoNombre : '') +
-          td(p ? fmtDateBR(p.nacimiento) : '', { center: true }) +
-          td(p ? p.nacionalidad : '', { center: true }) +
-          td(p ? p.documento : '') +
-          td(p && p.visa !== 'con' ? 'X' : '', { center: true }) +
-          td(p && p.visa === 'con' ? 'X' : '', { center: true }) +
-          td('') + '</tr>';
-      }
-
-      rows += '<tr>' + td('Responsable del Transporte') + td('') +
-        td('FIRMA SUPERVISOR', { cs: 3 }) + td('SELLO DE CONTROL', { cs: 3 }) + '</tr>';
-      rows += '<tr>' + td('', { cs: 8, cls: 'of-spacer' }) + '</tr>';
-      rows += '<tr>' + td('', { cs: 8, cls: 'of-spacer' }) + '</tr>';
-      rows += '<tr>' + td('', { cs: 8, cls: 'of-spacer' }) + '</tr>';
-      rows += '<tr>' + td('', { cs: 8, cls: 'of-spacer' }) + '</tr>';
-      rows += '<tr>' + td('Responsable del Transporte') + td('') +
-        td('FIRMA SUPERVISOR', { cs: 3 }) +
-        td('                   SELLO DE CONTROL', { cs: 3 }) + '</tr>';
-      return rows;
-    }
-
-    function officialBlockHtml(kind, paxSlice) {
-      return '<section class="official-sheet"><table class="excel-grid">' +
-        EXCEL_COLGROUP + blockRowsHtml(kind, paxSlice) + '</table></section>';
-    }
-
-    function buildPrintPages() {
-      var pax = filledPax();
-      var copias = state.header.copias || 'ambos';
-      if (copias === 'ambos') {
-        var gap = '';
-        var g;
-        for (g = 0; g < 5; g++) gap += '<tr class="of-gap-row">' + td('', { cs: 8 }) + '</tr>';
-        return '<section class="official-sheet official-sheet--full"><table class="excel-grid">' +
-          EXCEL_COLGROUP +
-          blockRowsHtml('ENTRADA', pax.slice(0, PAX_ROWS_ENTRADA)) +
-          gap +
-          blockRowsHtml('SALIDA', pax.slice(0, PAX_ROWS_SALIDA)) +
-          '</table></section>';
-      }
-      if (copias === 'entrada') {
-        return officialBlockHtml('ENTRADA', pax.slice(0, PAX_ROWS_ENTRADA));
-      }
-      return officialBlockHtml('SALIDA', pax.slice(0, PAX_ROWS_SALIDA));
-    }
-
-    function syncPrintRoot() {
-      $('print-root').innerHTML = buildPrintPages();
-    }
-
-    /* ---------- PDF oficial: html2canvas (layout = .xls) ---------- */
-    function generateOfficialPdf() {
-      if (!window.jspdf || !window.jspdf.jsPDF) {
-        alert('Biblioteca jsPDF não carregou. Use o botão de impressão do Safari.');
-        return;
-      }
-      syncPrintRoot();
-      var sheets = document.querySelectorAll('#print-root .official-sheet');
-      if (!sheets.length || typeof html2canvas !== 'function') {
-        alert('Não foi possível gerar PDF. Use Imprimir no Safari.');
-        return;
-      }
-      var jsPDF = window.jspdf.jsPDF;
-      var pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-      var chain = Promise.resolve();
-      Array.prototype.forEach.call(sheets, function (sheet, idx) {
-        chain = chain.then(function () {
-          return html2canvas(sheet, {
-            scale: 2,
-            backgroundColor: '#ffffff',
-            useCORS: true,
-            logging: false,
-            windowWidth: sheet.scrollWidth
-          }).then(function (canvas) {
-            var img = canvas.toDataURL('image/jpeg', 0.92);
-            if (idx > 0) pdf.addPage();
-            var hMm = 297 * (canvas.height / canvas.width) * (210 / 297);
-            if (hMm > 297) {
-              pdf.addImage(img, 'JPEG', 0, 0, 210, 297);
-            } else {
-              pdf.addImage(img, 'JPEG', 0, 0, 210, hMm);
-            }
-          });
-        });
-      });
-      chain.then(function () {
-        pdf.save('LISTA DE PASSAGEIROS PRA ARGENTINA.pdf');
-      }).catch(function () {
-        alert('Erro ao gerar PDF. Use Imprimir no Safari.');
-      });
-    }
-
-    function kindSafe() {
-      return (state.header.copias || 'ambos').toUpperCase();
-    }
     /* ---------- Scanner / OCR (várias tentativas + conferência) ---------- */
     function setScanStatus(msg) { $('scan-status').textContent = msg; }
 
@@ -1319,6 +1144,7 @@
     function isAutoApplyReady(parsed) {
       if (!parsed) return false;
       return parsed.docCheckOk && parsed.birthCheckOk &&
+        isValidIsoDate(parsed.nacimiento) &&
         parsed.score >= 70 && looksLikeName(parsed.apellidoNombre) &&
         (parsed.documento || '').length >= 5 && !!NAT[parsed.nacionalidadCode];
     }
@@ -1374,7 +1200,8 @@
       readMrzQuick(frame).then(function (mrz) {
         ocrBusy = false;
         if (!autoScanActive) return;
-        if (mrz && mrz.score >= 55 && mrz.docCheckOk && mrz.birthCheckOk) {
+        if (mrz && mrz.score >= 55 && mrz.docCheckOk &&
+            (mrz.birthCheckOk || isValidIsoDate(mrz.nacimiento))) {
           var key = mrzStableKey(mrz);
           if (key === stableMrzKey) stableMrzHits++;
           else { stableMrzKey = key; stableMrzHits = 1; }
@@ -1442,7 +1269,7 @@
       stopAutoScan();
       pendingParsed = parsed;
       $('cf-nombre').textContent = parsed.apellidoNombre || '—';
-      $('cf-nacim').textContent = parsed.nacimiento ? fmtDateBR(parsed.nacimiento) : '—';
+      $('cf-nacim').value = isValidIsoDate(parsed.nacimiento) ? parsed.nacimiento : '';
       $('cf-nacio').textContent = parsed.nacionalidad || '—';
       $('cf-doc').textContent = (parsed.documento || '—');
       $('cf-raw').textContent = (parsed.line1 || '') + '\n' + (parsed.line2 || '');
@@ -1451,8 +1278,18 @@
         checks.unshift('As duas linhas de baixo (MRZ) fecharam os dígitos de controle.');
       } else {
         if (!parsed.docCheckOk) checks.unshift('O número na MRZ não fechou o dígito de controle — conferi com a página.');
-        if (!parsed.birthCheckOk) checks.unshift('A data na MRZ não fechou o dígito de controle — conferi com a página.');
+        if (!parsed.birthCheckOk) {
+          checks.unshift(parsed.nacimiento
+            ? 'A data na MRZ não fechou o dígito de controle — conferi com a página. Confira a fecha de nacimiento.'
+            : 'Não fechei o dígito da data na MRZ. Preencha a fecha de nacimiento se estiver em branco.');
+        }
       }
+      if (!parsed.nacimiento) {
+        checks.unshift('Fecha de nacimiento não veio completa — preencha no campo acima olhando o passaporte.');
+      }
+      $('cf-nacim').oninput = function () {
+        if (pendingParsed) pendingParsed.nacimiento = this.value;
+      };
       $('cf-note').textContent = checks.join(' ');
       $('scan-confirm').classList.remove('hidden');
       setScanStatus('Leitura pronta. Confira no passaporte antes de usar.');
@@ -1836,16 +1673,20 @@
         setScanStatus('Não consegui uma leitura confiável. Aproxime das duas linhas de baixo, com boa luz, ou cole a MRZ.');
         return;
       }
+      var nac = toStoredNacimiento(parsed.nacimiento);
       var payload = {
         apellidoNombre: (parsed.apellidoNombre || '').toUpperCase(),
-        nacimiento: parsed.nacimiento || '',
+        nacimiento: nac,
         nacionalidad: parsed.nacionalidad || '',
         documento: ('PASAPORTE ' + (parsed.documento || '')).trim(),
         visa: 'sin'
       };
       if (scanTargetId) {
         var found = state.pasajeros.filter(function (p) { return p.id === scanTargetId; })[0];
-        if (found) Object.assign(found, payload);
+        if (found) {
+          if (!nac && found.nacimiento) delete payload.nacimiento;
+          Object.assign(found, payload);
+        }
       } else {
         payload.id = uid();
         state.pasajeros.push(payload);
@@ -1981,26 +1822,11 @@
         startAutoScan();
       };
 
-      $('btn-print').onclick = function () {
-        syncPrintRoot();
-        document.body.classList.add('is-printing');
-        setTimeout(function () { window.print(); }, 50);
-      };
-      window.addEventListener('afterprint', function () {
-        document.body.classList.remove('is-printing');
-      });
-      $('btn-pdf').onclick = generateOfficialPdf;
       $('btn-xlsx').onclick = generateExcel;
 
       document.addEventListener('click', onAppClick);
       document.addEventListener('input', onAppInput);
       document.addEventListener('change', onAppInput);
-      if (window.matchMedia) {
-        window.matchMedia('print').addEventListener('change', function (e) {
-          if (!e.matches) document.body.classList.remove('is-printing');
-        });
-      }
-      syncPrintRoot();
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
