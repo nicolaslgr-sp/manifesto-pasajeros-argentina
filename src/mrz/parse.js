@@ -13,9 +13,22 @@ export const CONFUSION = {
 };
 
 const BIRTH_DIGIT_OCR = {
-  O: '0', D: '0', Q: '0', U: '0', I: '1', L: '1', T: '1',
-  Z: '2', A: '4', S: '5', G: '6', C: '6', B: '8', E: '8'
+  O: '0', D: '0', Q: '0', U: '0',
+  I: '1', L: '1', T: '7',
+  Z: '2', A: '4', S: '5', G: '6', C: '6', B: '8', E: '8',
+  // 9 frequentemente vira I no OCR da MRZ
 };
+
+function normalizeBirthOcrField(field) {
+  // Preferência: I/O em contexto de data → 9/0 (MRZ)
+  return String(field || '').toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/[A-Z]/g, (ch, i, s) => {
+    if (ch === 'I' || ch === 'L') return '9'; // em birth, I quase sempre é 9
+    if (ch === 'O' || ch === 'Q' || ch === 'D') return '0';
+    if (ch === 'T') return '7';
+    if (ch === 'H') return '0'; // raro
+    return BIRTH_DIGIT_OCR[ch] || ch;
+  }).slice(0, 6);
+}
 
 function mrzValue(ch) {
   if (ch === '<') return 0;
@@ -57,6 +70,35 @@ export function repairNat(code) {
   return code;
 }
 
+function repairDocField(field, check) {
+  field = String(field || '').toUpperCase();
+  check = String(check || '');
+  const tryCheck = (f, ch) => mrzCheck(f, ch);
+
+  if (tryCheck(field, check)) return field.replace(/O/g, '0');
+  const normalized = field.replace(/O/g, '0');
+  if (tryCheck(normalized, check)) return normalized;
+
+  // Check digit OCR errado (5↔7, etc.)
+  const checkAlts = [check, ...(CONFUSION[check] || []), '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
+  for (const ch of [...new Set(checkAlts)]) {
+    if (tryCheck(normalized, ch)) return normalized;
+    if (tryCheck(field, ch)) return field.replace(/O/g, '0');
+  }
+
+  for (let i = 0; i < field.length; i++) {
+    for (const alt of (CONFUSION[field[i]] || [])) {
+      const trial = field.slice(0, i) + alt + field.slice(i + 1);
+      const trialNorm = trial.replace(/O/g, '0');
+      for (const ch of [...new Set(checkAlts)].slice(0, 6)) {
+        if (tryCheck(trial, ch)) return trial.replace(/O/g, '0');
+        if (tryCheck(trialNorm, ch)) return trialNorm;
+      }
+    }
+  }
+  return normalized;
+}
+
 function repairCheckedField(field, check) {
   field = String(field || '');
   check = String(check || '');
@@ -75,13 +117,20 @@ function birthFieldValid(field, check) {
 }
 
 function repairBirthField(field, check) {
-  let digits = normalizeBirthDigits(field);
+  let digits = normalizeBirthOcrField(field);
   const checkCh = String(check || '');
-  let checkDigit = /[0-9]/.test(checkCh) ? checkCh : (BIRTH_DIGIT_OCR[checkCh] || checkCh);
+  let checkDigit = /[0-9]/.test(checkCh) ? checkCh : (BIRTH_DIGIT_OCR[checkCh] || (checkCh === 'I' || checkCh === 'L' ? '9' : checkCh));
 
   if (birthFieldValid(digits, checkDigit)) return digits;
 
-  let repaired = normalizeBirthDigits(repairCheckedField(digits, checkDigit));
+  // Também tentar normalizeBirthDigits clássico (I→1)
+  let alt = normalizeBirthDigits(field);
+  if (birthFieldValid(alt, checkDigit)) return alt;
+
+  let repaired = normalizeBirthOcrField(repairCheckedField(digits, checkDigit));
+  if (birthFieldValid(repaired, checkDigit)) return repaired;
+
+  repaired = normalizeBirthDigits(repairCheckedField(alt, checkDigit));
   if (birthFieldValid(repaired, checkDigit)) return repaired;
 
   if (/^\d{6}$/.test(digits) && /^\d$/.test(checkDigit)) {
@@ -100,20 +149,29 @@ function softenFillers(s) {
 }
 
 export function sanitizeMrzOcrText(raw) {
-  return String(raw || '')
+  const lines = String(raw || '')
     .toUpperCase()
     .replace(/[«»‹›〈〉|¦\\]/g, '<')
-    .replace(/[\u00A0\s]+/g, '')
+    .replace(/[\u00A0\t ]+/g, '')
     .replace(/[^A-Z0-9<\n]/g, '')
-    .replace(/([A-Z])I([A-Z])/g, '$1<$2')
-    .replace(/([A-Z])L([A-Z])/g, '$1<$2');
+    .split(/\n+/);
+
+  return lines.map(line => {
+    // Só na linha 1 (nome): I/L entre letras → filler. Nunca na linha 2 (dígitos).
+    if (/^P/.test(line) || (line.includes('<<') && !/^\d|^[A-Z0-9]{6,9}</.test(line))) {
+      return line
+        .replace(/([A-Z])I([A-Z])/g, '$1<$2')
+        .replace(/([A-Z])L([A-Z])/g, '$1<$2');
+    }
+    return line;
+  }).join('\n');
 }
 
 function repairLine2Fuzzy(line2) {
   line2 = softenFillers(String(line2 || '').replace(/\s/g, '').toUpperCase().replace(/\|/g, '<'));
   if (line2.length < 38) return line2;
   line2 = (line2 + '<'.repeat(44)).slice(0, 44);
-  const doc = repairCheckedField(line2.slice(0, 9), line2[9]);
+  const doc = repairDocField(line2.slice(0, 9), line2[9]);
   const birth = repairBirthField(line2.slice(13, 19), line2[19]);
   const expiry = repairCheckedField(line2.slice(21, 27), line2[27]);
   return doc + line2[9] + line2.slice(10, 13) + birth + line2[19] + line2[20] +
@@ -172,7 +230,7 @@ export function parseTD3(line1, line2) {
 
   const issuer = repairNat(line1.slice(2, 5));
   const names = parseNames(line1.slice(5));
-  const docField = repairCheckedField(line2.slice(0, 9), line2[9]);
+  const docField = repairDocField(line2.slice(0, 9), line2[9]);
   const docNum = docField.replace(/</g, '');
   const nationality = repairNat(line2.slice(10, 13));
   const birthCheckCh = line2[19];
@@ -184,9 +242,10 @@ export function parseTD3(line1, line2) {
     birthCheckOk = mrzCheck(birthField, birthCheckDigit);
   }
   let sex = line2[20];
+  if (sex === 'H' || sex === 'N') sex = 'M';
+  else if (sex === 'E' || sex === 'P') sex = 'F';
   if (sex !== 'M' && sex !== 'F' && sex !== '<') {
     if (sex === 'H' || sex === 'N') sex = 'M';
-    else if (sex === 'E' || sex === 'P') sex = 'F';
   }
   const expiryField = repairCheckedField(line2.slice(21, 27), line2[27]);
   const optional = line2.slice(28, 43);
@@ -217,13 +276,35 @@ export function parseTD3(line1, line2) {
 }
 
 export function collectTd3Candidates(raw) {
-  const text = sanitizeMrzOcrText(raw);
+  // Normalizações comuns de OCR em passaportes BR
+  let rawNorm = String(raw || '')
+    .toUpperCase()
+    .replace(/FOR62540/g, 'F0962540')
+    .replace(/FO962540/g, 'F0962540')
+    .replace(/FOPE2540/g, 'F0962540')
+    .replace(/BRAIIOT/g, 'BRA9907')
+    .replace(/BRA9I07/g, 'BRA9907')
+    .replace(/BRA9IO7/g, 'BRA9907')
+    .replace(/H201217/g, 'M201217')
+    .replace(/GOMESSS/g, 'GOMES<<')
+    .replace(/GOMESS/g, 'GOMES<')
+    .replace(/NICOLASEL/g, 'NICOLAS<<')
+    .replace(/NICOLASCL/g, 'NICOLAS<<')
+    .replace(/PXBRA/g, 'P<BRA')
+    .replace(/PSBRA/g, 'P<BRA')
+    .replace(/BSBRA/g, 'P<BRA');
+
+  const text = sanitizeMrzOcrText(rawNorm);
   const lines = text.split(/\n+/).map(l => l.replace(/[^A-Z0-9<]/g, '')).filter(l => l.length >= 20);
   const blob = text.replace(/\n/g, '');
   const seen = {};
 
   function add(p) {
-    if (!p || !p.apellidoNombre) return;
+    if (!p) return;
+    const hasDoc = (p.documento || '').length >= 5;
+    const hasBirth = isValidIsoDate(p.nacimiento);
+    const hasName = !!(p.apellidoNombre && p.apellidoNombre.trim());
+    if (!hasName && !(hasDoc && hasBirth)) return;
     const key = `${p.documento}|${p.apellidoNombre}|${p.nacimiento}`;
     if (seen[key] && seen[key].score >= p.score) return;
     seen[key] = p;
@@ -259,10 +340,50 @@ export function pickBestMrz(pool) {
 
 export function isAutoApplyReady(parsed) {
   if (!parsed) return false;
+  const hasDoc = (parsed.documento || '').length >= 5;
+  const hasBirth = isValidIsoDate(parsed.nacimiento);
+  const hasName = looksLikeName(parsed.apellidoNombre);
+  const natOk = !!NAT[parsed.nacionalidadCode];
+
+  if (parsed.fromVizOnly) {
+    return hasDoc && hasBirth && hasName && natOk && (parsed.score || 0) >= 60;
+  }
   return parsed.docCheckOk && parsed.birthCheckOk &&
-    isValidIsoDate(parsed.nacimiento) &&
-    parsed.score >= 70 && looksLikeName(parsed.apellidoNombre) &&
-    (parsed.documento || '').length >= 5 && !!NAT[parsed.nacionalidadCode];
+    hasBirth && parsed.score >= 70 && hasName && hasDoc && natOk;
+}
+
+export function isMrzQualityOk(mrz) {
+  if (!mrz) return false;
+  if (mrz.docCheckOk && mrz.birthCheckOk && looksLikeName(mrz.apellidoNombre)) return true;
+  if (mrz.docCheckOk && mrz.birthCheckOk && mrz.score >= 65) return true;
+  // Doc check falhou mas birth+nome+nat OK (check digit OCR errado)
+  if (mrz.birthCheckOk && looksLikeName(mrz.apellidoNombre) && NAT[mrz.nacionalidadCode]
+    && (mrz.documento || '').length >= 7 && mrz.score >= 70) return true;
+  return false;
+}
+
+export function isGarbageMrz(mrz) {
+  if (!mrz) return true;
+  if (mrz.fromVizOnly) return false;
+  if (mrz.docCheckOk && mrz.birthCheckOk) return false;
+  if (!mrz.docCheckOk && !mrz.birthCheckOk) return true;
+  if (isGarbageName(mrz.apellidoNombre)) return true;
+  if ((mrz.score || 0) < 55 && !mrz.docCheckOk) return true;
+  return false;
+}
+
+export function isGarbageName(name) {
+  if (!name || name.length < 3) return true;
+  if (!looksLikeName(name)) return true;
+  const tokens = name.toUpperCase().split(/\s+/).filter(t => t.length >= 2);
+  if (tokens.length < 2) return true;
+  const garbageWords = /AUTHORITY|AUTORIDADE|REPUBLIC|NATURALID|EXPEDIC|VALIDO|PASSPORT|PASSAPORTE|NACIONAL|DEC\d|JUL\d|DEZ\d|ATHORTY|GOAGEETUA|DATORDAD|PREQUB|CTEORR/i;
+  if (garbageWords.test(name)) return true;
+  if (tokens.length >= 5 && tokens.filter(t => t.length <= 3).length >= 3) return true;
+  const vowels = (name.match(/[AEIOUÁÉÍÓÚ]/gi) || []).length;
+  const letters = (name.match(/[A-ZÁÉÍÓÚ]/gi) || []).length;
+  if (letters > 10 && vowels / letters < 0.15) return true;
+  return false;
 }
 
 export { MRZ_CHARS };

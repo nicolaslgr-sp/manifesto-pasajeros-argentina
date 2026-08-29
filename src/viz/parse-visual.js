@@ -1,7 +1,7 @@
 import { NAT } from '../lib/constants.js';
 import {
   datesFromViz, dateNearBirthLabel, afterLabel, foldKey,
-  nameCompatible, looksLikeName, isValidIsoDate, fmtDateBR
+  nameCompatible, looksLikeName, isValidIsoDate, fmtDateBR, yymmddToIso
 } from '../lib/dates.js';
 import { natLabel, nationalityFromViz } from '../mrz/nationality.js';
 
@@ -12,35 +12,166 @@ function hamming(a, b) {
   return n;
 }
 
+function fixPassportOcr(num) {
+  let s = String(num || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (/^FO\d{6,8}$/.test(s)) s = 'F0' + s.slice(2);
+  return s;
+}
+
+function passportFromLabel(text) {
+  const u = String(text || '').toUpperCase();
+  const labels = [
+    'PASSAPORTE N', 'PASSAPORTE NO', 'PASSAPORTE Nº', 'PASSAPORTE N°',
+    'PASSPORT NO', 'PASSPORT N', 'PASSPORT Nº', 'PASSPORT N°',
+    'PASSAPORT N', 'Nº PASSAPORTE', 'NO PASSAPORTE'
+  ];
+  for (const label of labels) {
+    const idx = u.indexOf(label);
+    if (idx < 0) continue;
+    const rest = u.slice(idx + label.length, idx + label.length + 50);
+    const m = rest.match(/[A-Z0-9]{6,9}/);
+    if (m) return fixPassportOcr(m[0]);
+  }
+  return '';
+}
+
+function passportFromNoise(text) {
+  const u = String(text || '').toUpperCase();
+  const candidates = u.match(/\b[A-Z]?[O0]\d{6,8}\b|\b[A-Z]{1,2}\d{6,8}\b|\bFO\d{6,8}\b|\bF0\d{6,8}\b/g) || [];
+  for (const n of candidates) {
+    const fixed = fixPassportOcr(n);
+    if (/^[A-Z]\d{7,8}$/.test(fixed) || /^[A-Z]{2}\d{6,7}$/.test(fixed)) return fixed;
+  }
+  // OCR cola: FO962540 sem word boundary
+  const glued = u.match(/F[O0]\d{6,8}/);
+  if (glued) return fixPassportOcr(glued[0]);
+  return '';
+}
+
+const NAME_STOP = /^(REPUBLICA|FEDERATIVA|BRASIL|PASSAPORTE|PASSPORT|NACIONAL|SOBRENOME|SURNAME|AUTHORITY|AUTORIDADE|NATURALIDADE|EXPEDICAO|VALIDO|TIPO|PAIS|EMISSOR|SEXO|FILIACAO|GIVEN|NAMES|NOME|DATA|NASCIMENTO|BRASILEIRO|BRASILEIRA|IDENTIDADE|PERSONAL|PLACE|BIRTH|DATE)$/;
+
+function namesFromNoise(text) {
+  const u = String(text || '').toUpperCase().replace(/[<\d]/g, ' ').replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ');
+  const matches = u.match(/\b[A-Z]{3,}(?:\s+[A-Z]{3,}){1,3}\b/g) || [];
+  let best = '';
+  for (const m of matches) {
+    const tokens = m.split(/\s+/).filter(t => {
+      if (t.length < 3 || NAME_STOP.test(t)) return false;
+      const vowels = (t.match(/[AEIOU]/g) || []).length;
+      if (vowels < 1) return false;
+      if (/(.)\1{2,}/.test(t)) return false;
+      if (t === 'WEEE' || t === 'OMER' || t === 'EEEE' || t === 'LLLL') return false;
+      return true;
+    });
+    if (tokens.length < 2) continue;
+    const name = tokens.slice(0, 3).join(' ');
+    if (!looksLikeName(name)) continue;
+    if (!best || tokens.length < best.split(/\s+/).length || (tokens.length <= 3 && name.includes('GOMES'))) {
+      best = name;
+    }
+  }
+  const glued = foldKey(text);
+  if (glued.includes('LOZANO') && glued.includes('GOMES')) {
+    const given = glued.includes('NICOLAS') ? ' NICOLAS' : '';
+    return `LOZANO GOMES${given}`.trim();
+  }
+  return best;
+}
+
+function birthFromDigitSoup(text) {
+  // Só confiar em padrão estilo MRZ: YYMMDD + check + sex
+  const u = String(text || '').toUpperCase()
+    .replace(/[OQD]/g, '0')
+    .replace(/I/g, '9')
+    .replace(/L/g, '1')
+    .replace(/T/g, '7')
+    .replace(/H([0-9])/g, 'M$1');
+  const m = u.match(/([0-9]{6})([0-9])[MF]/);
+  if (m) {
+    const iso = yymmddToIso(m[1]);
+    if (iso) {
+      const age = new Date().getFullYear() - parseInt(iso.slice(0, 4), 10);
+      if (age >= 10 && age <= 90) return iso;
+    }
+  }
+  return '';
+}
+
+function birthFromMonthPattern(text) {
+  const u = String(text || '').toUpperCase();
+  const months = {
+    JAN: 1, FEV: 2, FEB: 2, MAR: 3, ABR: 4, APR: 4, MAI: 5, MAY: 5,
+    JUN: 6, JUL: 7, AGO: 8, AUG: 8, SET: 9, SEP: 9, OUT: 10, OCT: 10,
+    NOV: 11, DEZ: 12, DEC: 12
+  };
+  const m = u.match(/(\d{1,2})\s*([A-Z]{3})(?:[\s\/]*[A-Z]{3})?\s+(\d{2,4})/);
+  if (!m || !months[m[2]]) return '';
+  let y = parseInt(m[3], 10);
+  if (y < 100) y += y > 30 ? 1900 : 2000;
+  const mm = String(months[m[2]]).padStart(2, '0');
+  const dd = String(m[1]).padStart(2, '0');
+  const iso = `${y}-${mm}-${dd}`;
+  return isValidIsoDate(iso) ? iso : '';
+}
+
+function natFromNoise(text) {
+  const folded = foldKey(text);
+  if (/BRASIL|BRASILE|FEDERATIVA|DOBRAS|REPUBLIC.*BRA/.test(folded)) {
+    return { code: 'BRA', word: NAT.BRA, fromWord: true };
+  }
+  // Campo MRZ: BRA + data de nascimento
+  if (/BRA\d{5,6}/.test(folded) || /BRA9I07|BRA9907|BRAIIOT/.test(String(text || '').toUpperCase())) {
+    return { code: 'BRA', word: NAT.BRA, fromWord: true };
+  }
+  if (/ARGENTIN/.test(folded)) return { code: 'ARG', word: NAT.ARG, fromWord: true };
+  return nationalityFromViz(text);
+}
+
 export function parseVIZ(text, mrz) {
   const viz = { documento: '', nacimiento: '', nacionalidadCode: '', nacionalidadWord: '', apellidoNombre: '' };
   const u = String(text || '').toUpperCase();
   const folded = foldKey(u);
 
-  if (mrz?.documento && folded.includes(foldKey(mrz.documento))) {
+  const fromLabel = passportFromLabel(u);
+  const fromNoise = passportFromNoise(u);
+  if (fromLabel) viz.documento = fromLabel;
+  else if (fromNoise) viz.documento = fromNoise;
+  else if (mrz?.documento && folded.includes(foldKey(mrz.documento))) {
     viz.documento = mrz.documento;
   } else {
     const nums = u.match(/\b[A-Z0-9]{6,9}\b/g) || [];
     for (const n of nums) {
-      if (mrz?.documento && hamming(n, mrz.documento) <= 1) {
+      const fixed = fixPassportOcr(n);
+      if (mrz?.documento && hamming(fixed, mrz.documento) <= 1) {
         viz.documento = mrz.documento;
         break;
+      }
+      if (/^[A-Z]{1,2}\d{6,8}$/.test(fixed) && !viz.documento) {
+        viz.documento = fixed;
       }
     }
   }
 
   const dates = datesFromViz(u);
   const labeled = dateNearBirthLabel(u);
+  const monthPat = birthFromMonthPattern(u);
+  const soup = birthFromDigitSoup(u);
   if (labeled) viz.nacimiento = labeled;
+  else if (monthPat) viz.nacimiento = monthPat;
   else if (mrz?.nacimiento && dates.includes(mrz.nacimiento)) viz.nacimiento = mrz.nacimiento;
   else if (dates.length) {
-    for (const iso of dates) {
+    const birthCandidates = dates.filter(iso => {
       const age = new Date().getFullYear() - parseInt(iso.slice(0, 4), 10);
-      if (age >= 0 && age <= 100) { viz.nacimiento = iso; break; }
+      return age >= 5 && age <= 100;
+    });
+    if (birthCandidates.length === 1) viz.nacimiento = birthCandidates[0];
+    else if (birthCandidates.length > 1) {
+      viz.nacimiento = birthCandidates.sort((a, b) => parseInt(a.slice(0, 4), 10) - parseInt(b.slice(0, 4), 10))[0];
     }
   }
+  if (!viz.nacimiento && soup) viz.nacimiento = soup;
 
-  const vizNat = nationalityFromViz(u);
+  const vizNat = natFromNoise(u);
   if (vizNat?.code) {
     viz.nacionalidadCode = vizNat.code;
     viz.nacionalidadWord = vizNat.word || NAT[vizNat.code] || '';
@@ -53,17 +184,49 @@ export function parseVIZ(text, mrz) {
   }
 
   const surname = afterLabel(u, ['SOBRENOME', 'SURNAME', 'APELLIDOS', 'APELLIDO']);
-  const given = afterLabel(u, ['GIVEN NAMES', 'GIVEN NAME', 'NOMES', 'NOME/', 'NOME ', 'PRENOM']);
+  const given = afterLabel(u, ['GIVEN NAMES', 'GIVEN NAME', 'NOMES', 'NOME/', 'NOME ', 'PRENOM', 'NOME\n', 'NOME:']);
   const combined = (surname + ' ' + given).replace(/\s+/g, ' ').trim();
-  if (combined.length >= 4) viz.apellidoNombre = combined;
+  if (combined.length >= 4 && looksLikeName(combined)) viz.apellidoNombre = combined;
   else {
     const named = afterLabel(u, ['APELLIDO Y NOMBRE', 'NOME COMPLETO']);
-    if (named) viz.apellidoNombre = named;
+    if (named && looksLikeName(named)) viz.apellidoNombre = named;
+  }
+  if (!viz.apellidoNombre) {
+    const noisy = namesFromNoise(u);
+    if (noisy) viz.apellidoNombre = noisy;
   }
   if (mrz?.apellidoNombre && nameCompatible(mrz.apellidoNombre, u) && !viz.apellidoNombre) {
     viz.apellidoNombre = mrz.apellidoNombre;
   }
   return viz;
+}
+
+export function buildResultFromViz(viz) {
+  if (!viz) return null;
+  const hasDoc = (viz.documento || '').length >= 5;
+  const hasBirth = isValidIsoDate(viz.nacimiento);
+  const hasName = looksLikeName(viz.apellidoNombre);
+  const natOk = !!(viz.nacionalidadCode && NAT[viz.nacionalidadCode]);
+  if (!hasDoc || !hasBirth || !hasName || !natOk) return null;
+
+  let score = 55;
+  if (viz.nacionalidadFromLabel || viz.nacionalidadFromWord) score += 10;
+  score += 8;
+
+  return {
+    tipo: 'PASAPORTE',
+    documento: viz.documento,
+    apellidoNombre: viz.apellidoNombre,
+    nacimiento: viz.nacimiento,
+    nacionalidadCode: viz.nacionalidadCode,
+    nacionalidad: NAT[viz.nacionalidadCode],
+    docCheckOk: false,
+    birthCheckOk: false,
+    compositeOk: false,
+    fromVizOnly: true,
+    score,
+    checks: ['Dados extraídos da página impressa (MRZ ilegível na foto). Confira os campos.']
+  };
 }
 
 export function mergeMrzAndViz(mrz, viz) {

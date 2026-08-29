@@ -1,0 +1,16 @@
+{
+  "id": "nicolas-bra-2015",
+  "description": "Passaporte BRA 2 paginas abertas - foto real iPhone",
+  "image": "nicolas-bra.jpg",
+  "expected": {
+    "documento": "F0962540",
+    "nacimiento": "1999-07-15",
+    "nacionalidadCode": "BRA",
+    "apellidoNombre": "LOZANO GOMES NICOLAS"
+  },
+  "mrz": {
+    "line1": "P<BRALOZANO<GOMES<<NICOLAS<<<<<<<<<<<<<<<<<<",
+    "line2": "F0962540<5BRA9907157M20121791234567890123458"
+  },
+  "vizText": "PASSAPORTE N F0962540\nSOBRENOME LOZANO GOMES\nNOME NICOLAS\nNACIONALIDADE BRASILEIRO\nDATA DO NASCIMENTO 15 JUL/JUL 1999"
+}

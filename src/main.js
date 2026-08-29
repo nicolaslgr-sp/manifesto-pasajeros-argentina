@@ -3,7 +3,7 @@ import {
   GUIDE_NAME, PAX_MAX_TOTAL, NAT, crewCount, filledPax
 } from './lib/constants.js';
 import { toStoredNacimiento, isValidIsoDate, fmtDateBR } from './lib/dates.js';
-import { isAutoApplyReady } from './mrz/parse.js';
+import { isAutoApplyReady, isGarbageMrz, isGarbageName } from './mrz/parse.js';
 import { natLabel } from './viz/parse-visual.js';
 import { loadStaticImage } from './ocr/static-image-loader.js';
 import { readPassportFromStaticImage, readMrzFromText } from './ocr/static-pipeline.js';
@@ -186,7 +186,15 @@ function applyParsed(parsed) {
 
 function finishScanResult(result) {
   if (!result) {
-    setScanStatus('Não consegui ler com segurança. Tente outra foto com boa luz e página inteira.');
+    setScanStatus('Não consegui ler com segurança. Tente foto só da página de dados, com boa luz e sem reflexo.');
+    return;
+  }
+  if (isGarbageName(result.apellidoNombre) && !result.fromVizOnly) {
+    setScanStatus('Leitura incorreta detectada. Tente outra foto — de preferência só a página de dados, ou mais perto da MRZ.');
+    return;
+  }
+  if (isGarbageMrz(result) && !result.fromVizOnly && !result.documento) {
+    setScanStatus('Não consegui ler o passaporte. Tente outra foto com a página inteira e boa iluminação.');
     return;
   }
   if (isAutoApplyReady(result)) {

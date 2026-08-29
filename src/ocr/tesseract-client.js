@@ -8,6 +8,7 @@ export function ensureWorker(onStatus) {
   if (worker) return Promise.resolve(worker);
   if (workerPromise) return workerPromise;
   onStatus?.('Carregando motor de leitura (só na primeira vez)…');
+  // Browser: defaults do Tesseract. Node (test script): também defaults via worker/node.
   workerPromise = createWorker('eng', 1, {
     logger: () => {}
   }).then(async w => {
@@ -26,10 +27,14 @@ export async function ocrCanvas(canvas, psm, whitelist = MRZ_CHARS) {
   const w = await ensureWorker();
   await w.setParameters({
     tessedit_pageseg_mode: String(psm),
-    tessedit_char_whitelist: whitelist,
-    tessedit_ocr_engine_mode: '1'
+    tessedit_char_whitelist: whitelist
   });
-  const res = await w.recognize(canvas);
+  // node-canvas: Tesseract precisa de Buffer/PNG
+  let input = canvas;
+  if (typeof canvas.toBuffer === 'function') {
+    input = canvas.toBuffer('image/png');
+  }
+  const res = await w.recognize(input);
   return (res?.data?.text) || '';
 }
 

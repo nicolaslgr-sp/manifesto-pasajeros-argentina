@@ -104,6 +104,16 @@ export function analyzeImageContrast(frame) {
   return { mean, std: Math.sqrt(variance / gray.length) };
 }
 
+function newCanvas(width, height) {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.__nodeCreateCanvas === 'function') {
+    return globalThis.__nodeCreateCanvas(width, height);
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
 export function makeMrzBand(frame, y0, y1, mode, wide = true) {
   const w = frame.width, h = frame.height;
   const side = wide ? 0.02 : 0.07;
@@ -111,12 +121,12 @@ export function makeMrzBand(frame, y0, y1, mode, wide = true) {
   const sw = Math.floor(w * (1 - side * 2));
   const sy = Math.floor(h * y0);
   const sh = Math.max(12, Math.floor(h * (y1 - y0)));
-  const scale = Math.min(3.0, Math.max(2.0, 2400 / sw));
+  // Fotos estreitas (ex.: 768px) precisam de upscale maior para a MRZ ficar legível
+  const maxScale = w < 1200 ? 4.0 : 3.0;
+  const scale = Math.min(maxScale, Math.max(2.0, 2400 / sw));
   const cw = Math.floor(sw * scale);
   const ch = Math.floor(sh * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = cw;
-  canvas.height = ch;
+  const canvas = newCanvas(cw, ch);
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = true;
   ctx.fillStyle = '#fff';
@@ -157,9 +167,7 @@ export function makeVizBand(frame, y0, y1, mode = 'contrast') {
   const scale = Math.min(2.4, Math.max(1.3, 1280 / sw));
   const cw = Math.floor(sw * scale);
   const ch = Math.floor(sh * scale);
-  const canvas = document.createElement('canvas');
-  canvas.width = cw;
-  canvas.height = ch;
+  const canvas = newCanvas(cw, ch);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, cw, ch);
@@ -184,9 +192,79 @@ export function makeVizBand(frame, y0, y1, mode = 'contrast') {
 export function resizeFrame(frame, maxWidth = 2400) {
   if (frame.width <= maxWidth) return frame;
   const scale = maxWidth / frame.width;
-  const c = document.createElement('canvas');
-  c.width = maxWidth;
-  c.height = Math.floor(frame.height * scale);
+  const c = newCanvas(maxWidth, Math.floor(frame.height * scale));
   c.getContext('2d').drawImage(frame, 0, 0, c.width, c.height);
   return c;
+}
+
+/** Detecta se a foto parece passaporte aberto (2 páginas). */
+export function isTwoPagePhoto(frame) {
+  const aspect = frame.height / Math.max(1, frame.width);
+  return aspect > 1.25;
+}
+
+/**
+ * Prefere a faixa mais baixa com alto contraste horizontal (MRZ),
+ * não a faixa mais densa no meio (VIZ / autoridade).
+ * Em fotos 2 páginas, retorna no mínimo y0≈0.90.
+ */
+export function detectMrzBandY(frame) {
+  const w = frame.width, h = frame.height;
+  const twoPage = isTwoPagePhoto(frame);
+  const ctx = frame.getContext('2d');
+  const minY0 = twoPage ? 0.88 : 0.72;
+  const scanStart = Math.floor(h * minY0);
+  const scanH = h - scanStart;
+  if (scanH < 16) {
+    return twoPage ? { y0: 0.90, y1: 1.0 } : null;
+  }
+
+  const img = ctx.getImageData(0, scanStart, w, scanH);
+  const gray = grayFromImageData(img.data, w * scanH);
+  const stripCount = 16;
+  const stripH = Math.max(1, Math.floor(scanH / stripCount));
+  const scores = [];
+
+  for (let s = 0; s < stripCount; s++) {
+    const yOff = s * stripH;
+    const sh = Math.min(stripH, scanH - yOff);
+    let horizEdge = 0, darkSum = 0, n = 0;
+    for (let y = 1; y < sh - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = (yOff + y) * w + x;
+        const g = gray[idx];
+        // MRZ: linhas horizontais de caracteres → contraste horizontal forte
+        horizEdge += Math.abs(g - gray[idx - 1]);
+        if (g < 140) darkSum++;
+        n++;
+      }
+    }
+    if (!n) { scores.push(0); continue; }
+    // Bonus para faixas mais baixas (MRZ fica no fundo absoluto)
+    const bottomBias = (s / stripCount) * 40;
+    scores.push((horizEdge / n) * 0.9 + (darkSum / n) * 50 + bottomBias);
+  }
+
+  let bestStart = -1, bestScore = 0;
+  const win = 3;
+  for (let i = 0; i <= stripCount - win; i++) {
+    let score = 0;
+    for (let j = 0; j < win; j++) score += scores[i + j];
+    // Preferir empates mais abaixo
+    if (score >= bestScore) {
+      bestScore = score;
+      bestStart = i;
+    }
+  }
+
+  if (bestStart < 0 || bestScore < 10) {
+    return twoPage ? { y0: 0.90, y1: 1.0 } : { y0: 0.78, y1: 1.0 };
+  }
+
+  let y0 = (scanStart + bestStart * stripH) / h;
+  let y1 = Math.min(1, (scanStart + (bestStart + win) * stripH + stripH) / h);
+  if (twoPage) y0 = Math.max(0.90, y0 - 0.01);
+  else y0 = Math.max(0.75, y0 - 0.02);
+  y1 = Math.min(1, Math.max(y1, y0 + 0.06));
+  return { y0, y1 };
 }

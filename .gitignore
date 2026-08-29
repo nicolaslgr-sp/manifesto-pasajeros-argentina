@@ -5,3 +5,5 @@ node_modules/
 .pydeps/
 dist/
 scripts/test-*.xls
+*.traineddata
+.tess-cache/

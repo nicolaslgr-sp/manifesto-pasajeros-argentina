@@ -1,0 +1,257 @@
+[
+  {
+    "id": "bra-nicolas",
+    "country": "BRA",
+    "line1": "P<BRALOZANO<GOMES<<NICOLAS<<<<<<<<<<<<<<<<<<",
+    "line2": "F0962540<5BRA9907157M20121791234567890123458",
+    "noisyOcr": "P<BRALOZANO<GOMES<<NICOLAS<<<<<<<<<<<<<<<<<<\nF0962540<5BRA9907157M20121791234567890123458",
+    "vizText": "PASSAPORTE N F0962540\nSOBRENOME LOZANO GOMES\nNOME NICOLAS\nNACIONALIDADE BRASILEIRO\nDATA DO NASCIMENTO 15 JUL/JUL 1999",
+    "expected": {
+      "documento": "F0962540",
+      "nacimiento": "1999-07-15",
+      "nacionalidadCode": "BRA",
+      "apellidoNombre": "LOZANO GOMES NICOLAS",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "bra-silva",
+    "country": "BRA",
+    "line1": "P<BRASILVA<SANTOS<<MARIA<<<<<<<<<<<<<<<<<<<<",
+    "line2": "YB12345679BRA8503150F28010161234567890123459",
+    "noisyOcr": "P<BRASILVA<SANTOS<<MARIA<<<<<<<<<<<<<<<<<<<<\nYB12345679BRA8503150F28010161234567890123459",
+    "vizText": "PASSPORT NO YB1234567\nSURNAME SILVA SANTOS\nGIVEN NAMES MARIA\nNATIONALITY BRAZILIAN\nDATE OF BIRTH 15 MAR 1985",
+    "expected": {
+      "documento": "YB1234567",
+      "nacimiento": "1985-03-15",
+      "nacionalidadCode": "BRA",
+      "apellidoNombre": "SILVA SANTOS MARIA",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "arg-garcia",
+    "country": "ARG",
+    "line1": "P<ARGGARCIA<<JUAN<CARLOS<<<<<<<<<<<<<<<<<<<<",
+    "line2": "AAK1234565ARG9001011M30010191234567890123453",
+    "noisyOcr": "P<ARGGARCIA<<JUAN<CARLOS<<<<<<<<<<<<<<<<<<<<\nAAK1234565ARG9001011M30010191234567890123453",
+    "vizText": "APELLIDOS GARCIA\nNOMBRE JUAN CARLOS\nNACIONALIDAD ARGENTINA\nFECHA DE NACIMIENTO 01 ENE 1990\nPASAPORTE AAK123456",
+    "expected": {
+      "documento": "AAK123456",
+      "nacimiento": "1990-01-01",
+      "nacionalidadCode": "ARG",
+      "apellidoNombre": "GARCIA JUAN CARLOS",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "usa-smith",
+    "country": "USA",
+    "line1": "P<USASMITH<<JOHN<WILLIAM<<<<<<<<<<<<<<<<<<<<",
+    "line2": "1234567897USA8805050M35010141234567890123450",
+    "noisyOcr": "P<USASMITH<<JOHN<WILLIAM<<<<<<<<<<<<<<<<<<<<\n1234567897USA8805050M35010141234567890123450",
+    "vizText": "PASSPORT NO 123456789\nSURNAME SMITH\nGIVEN NAMES JOHN WILLIAM\nNATIONALITY AMERICAN\nDATE OF BIRTH 05 MAY 1988",
+    "expected": {
+      "documento": "123456789",
+      "nacimiento": "1988-05-05",
+      "nacionalidadCode": "USA",
+      "apellidoNombre": "SMITH JOHN WILLIAM",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "gbr-jones",
+    "country": "GBR",
+    "line1": "P<GBRJONES<<EMILY<ROSE<<<<<<<<<<<<<<<<<<<<<<",
+    "line2": "9876543213GBR9202128F30010191234567890123453",
+    "noisyOcr": "P<GBRJONES<<EMILY<ROSE<<<<<<<<<<<<<<<<<<<<<<\n9876543213GBR9202128F30010191234567890123453",
+    "vizText": "PASSPORT NO 987654321\nSURNAME JONES\nGIVEN NAMES EMILY ROSE\nNATIONALITY BRITISH\nDATE OF BIRTH 12 FEB 1992",
+    "expected": {
+      "documento": "987654321",
+      "nacimiento": "1992-02-12",
+      "nacionalidadCode": "GBR",
+      "apellidoNombre": "JONES EMILY ROSE",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "deu-muller",
+    "country": "DEU",
+    "line1": "P<D<<MULLER<<HANS<PETER<<<<<<<<<<<<<<<<<<<<<",
+    "line2": "C01X00T478DEU8506302M28010161234567890123453",
+    "noisyOcr": "P<D<<MULLER<<HANS<PETER<<<<<<<<<<<<<<<<<<<<<\nC01X00T478DEU8506302M28010161234567890123453",
+    "vizText": "PASSPORT NO C01X00T47\nSURNAME MULLER\nGIVEN NAMES HANS PETER\nNATIONALITY GERMAN\nDATE OF BIRTH 30 JUN 1985",
+    "expected": {
+      "documento": "C01X00T47",
+      "nacimiento": "1985-06-30",
+      "nacionalidadCode": "DEU",
+      "apellidoNombre": "MULLER HANS PETER",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "fra-dubois",
+    "country": "FRA",
+    "line1": "P<FRADUBOIS<<MARIE<CLAIRE<<<<<<<<<<<<<<<<<<<",
+    "line2": "12AB345673FRA9008157F30010191234567890123451",
+    "noisyOcr": "P<FRADUBOIS<<MARIE<CLAIRE<<<<<<<<<<<<<<<<<<<\n12AB345673FRA9008157F30010191234567890123451",
+    "vizText": "PASSEPORT NO 12AB34567\nNOM DUBOIS\nPRENOM MARIE CLAIRE\nNATIONALITE FRANCAISE\nDATE DE NAISSANCE 15 AUG 1990",
+    "expected": {
+      "documento": "12AB34567",
+      "nacimiento": "1990-08-15",
+      "nacionalidadCode": "FRA",
+      "apellidoNombre": "DUBOIS MARIE CLAIRE",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "ita-rossi",
+    "country": "ITA",
+    "line1": "P<ITAROSSI<<GIUSEPPE<<<<<<<<<<<<<<<<<<<<<<<<",
+    "line2": "YA12345676ITA8704016M28010161234567890123459",
+    "noisyOcr": "P<ITAROSSI<<GIUSEPPE<<<<<<<<<<<<<<<<<<<<<<<<\nYA12345676ITA8704016M28010161234567890123459",
+    "vizText": "PASSPORT NO YA1234567\nCOGNOME ROSSI\nNOME GIUSEPPE\nCITTADINANZA ITALIANA\nDATA DI NASCITA 01 APR 1987",
+    "expected": {
+      "documento": "YA1234567",
+      "nacimiento": "1987-04-01",
+      "nacionalidadCode": "ITA",
+      "apellidoNombre": "ROSSI GIUSEPPE",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "esp-lopez",
+    "country": "ESP",
+    "line1": "P<ESPLOPEZ<GARCIA<<ANA<MARIA<<<<<<<<<<<<<<<<",
+    "line2": "XDE1234569ESP9109227F30010191234567890123456",
+    "noisyOcr": "P<ESPLOPEZ<GARCIA<<ANA<MARIA<<<<<<<<<<<<<<<<\nXDE1234569ESP9109227F30010191234567890123456",
+    "vizText": "PASAPORTE NO XDE123456\nAPELLIDOS LOPEZ GARCIA\nNOMBRE ANA MARIA\nNACIONALIDAD ESPANOLA\nFECHA DE NACIMIENTO 22 SEP 1991",
+    "expected": {
+      "documento": "XDE123456",
+      "nacimiento": "1991-09-22",
+      "nacionalidadCode": "ESP",
+      "apellidoNombre": "LOPEZ GARCIA ANA MARIA",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "prt-sousa",
+    "country": "PRT",
+    "line1": "P<PRTSOUSA<<JOAO<PEDRO<<<<<<<<<<<<<<<<<<<<<<",
+    "line2": "N123456785PRT9303106M28010161234567890123453",
+    "noisyOcr": "P<PRTSOUSA<<JOAO<PEDRO<<<<<<<<<<<<<<<<<<<<<<\nN123456785PRT9303106M28010161234567890123453",
+    "vizText": "PASSAPORTE N N12345678\nAPELIDO SOUSA\nNOMES JOAO PEDRO\nNACIONALIDADE PORTUGUESA\nDATA DE NASCIMENTO 10 MAR 1993",
+    "expected": {
+      "documento": "N12345678",
+      "nacimiento": "1993-03-10",
+      "nacionalidadCode": "PRT",
+      "apellidoNombre": "SOUSA JOAO PEDRO",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "jpn-tanaka",
+    "country": "JPN",
+    "line1": "P<JPNTANAKA<<TARO<<<<<<<<<<<<<<<<<<<<<<<<<<<",
+    "line2": "TR12345672JPN9506011M28010161234567890123459",
+    "noisyOcr": "P<JPNTANAKA<<TARO<<<<<<<<<<<<<<<<<<<<<<<<<<<\nTR12345672JPN9506011M28010161234567890123459",
+    "vizText": "PASSPORT NO TR1234567\nSURNAME TANAKA\nGIVEN NAMES TARO\nNATIONALITY JAPANESE\nDATE OF BIRTH 01 JUN 1995",
+    "expected": {
+      "documento": "TR1234567",
+      "nacimiento": "1995-06-01",
+      "nacionalidadCode": "JPN",
+      "apellidoNombre": "TANAKA TARO",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "mex-hernandez",
+    "country": "MEX",
+    "line1": "P<MEXHERNANDEZ<<CARLOS<ALBERTO<<<<<<<<<<<<<<",
+    "line2": "G123456786MEX8807076M28010161234567890123459",
+    "noisyOcr": "P<MEXHERNANDEZ<<CARLOS<ALBERTO<<<<<<<<<<<<<<\nG123456786MEX8807076M28010161234567890123459",
+    "vizText": "PASAPORTE NO G12345678\nAPELLIDOS HERNANDEZ\nNOMBRE CARLOS ALBERTO\nNACIONALIDAD MEXICANA\nFECHA DE NACIMIENTO 07 JUL 1988",
+    "expected": {
+      "documento": "G12345678",
+      "nacimiento": "1988-07-07",
+      "nacionalidadCode": "MEX",
+      "apellidoNombre": "HERNANDEZ CARLOS ALBERTO",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "pry-benitez",
+    "country": "PRY",
+    "line1": "P<PRYBENITEZ<<MARIA<ELENA<<<<<<<<<<<<<<<<<<<",
+    "line2": "PA12345673PRY9204041F30010191234567890123453",
+    "noisyOcr": "P<PRYBENITEZ<<MARIA<ELENA<<<<<<<<<<<<<<<<<<<\nPA12345673PRY9204041F30010191234567890123453",
+    "vizText": "PASAPORTE PA1234567\nAPELLIDO BENITEZ\nNOMBRE MARIA ELENA\nNACIONALIDAD PARAGUAYA\nFECHA DE NACIMIENTO 04 ABR 1992",
+    "expected": {
+      "documento": "PA1234567",
+      "nacimiento": "1992-04-04",
+      "nacionalidadCode": "PRY",
+      "apellidoNombre": "BENITEZ MARIA ELENA",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "ury-rodriguez",
+    "country": "URY",
+    "line1": "P<URYRODRIGUEZ<<LUIS<ALBERTO<<<<<<<<<<<<<<<<",
+    "line2": "U123456784URY8909095M28010161234567890123455",
+    "noisyOcr": "P<URYRODRIGUEZ<<LUIS<ALBERTO<<<<<<<<<<<<<<<<\nU123456784URY8909095M28010161234567890123455",
+    "vizText": "PASAPORTE U12345678\nAPELLIDO RODRIGUEZ\nNOMBRE LUIS ALBERTO\nNACIONALIDAD URUGUAYA\nFECHA DE NACIMIENTO 09 SEP 1989",
+    "expected": {
+      "documento": "U12345678",
+      "nacimiento": "1989-09-09",
+      "nacionalidadCode": "URY",
+      "apellidoNombre": "RODRIGUEZ LUIS ALBERTO",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "chl-morales",
+    "country": "CHL",
+    "line1": "P<CHLMORALES<<SOFIA<ANDREA<<<<<<<<<<<<<<<<<<",
+    "line2": "F123456789CHL9403039F30010191234567890123457",
+    "noisyOcr": "P<CHLMORALES<<SOFIA<ANDREA<<<<<<<<<<<<<<<<<<\nF123456789CHL9403039F30010191234567890123457",
+    "vizText": "PASAPORTE F12345678\nAPELLIDO MORALES\nNOMBRE SOFIA ANDREA\nNACIONALIDAD CHILENA\nFECHA DE NACIMIENTO 03 MAR 1994",
+    "expected": {
+      "documento": "F12345678",
+      "nacimiento": "1994-03-03",
+      "nacionalidadCode": "CHL",
+      "apellidoNombre": "MORALES SOFIA ANDREA",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "col-ramirez",
+    "country": "COL",
+    "line1": "P<COLRAMIREZ<<DIEGO<FERNANDO<<<<<<<<<<<<<<<<",
+    "line2": "AS12345672COL9106064M28010161234567890123453",
+    "noisyOcr": "P<COLRAMIREZ<<DIEGO<FERNANDO<<<<<<<<<<<<<<<<\nAS12345672COL9106064M28010161234567890123453",
+    "vizText": "PASAPORTE AS1234567\nAPELLIDO RAMIREZ\nNOMBRE DIEGO FERNANDO\nNACIONALIDAD COLOMBIANA\nFECHA DE NACIMIENTO 06 JUN 1991",
+    "expected": {
+      "documento": "AS1234567",
+      "nacimiento": "1991-06-06",
+      "nacionalidadCode": "COL",
+      "apellidoNombre": "RAMIREZ DIEGO FERNANDO",
+      "autoApply": true
+    }
+  },
+  {
+    "id": "garbage-viz-as-mrz",
+    "country": "BRA",
+    "line1": "PREQUBYR<AVT<LUT<GOAGEETUA<CTEORR<R<DATORDAD",
+    "line2": "E<ATHORTYNECABBEXDECZ2015SCDPE<FIG<PRBC<CL<E",
+    "vizText": "PASSAPORTE N F0962540\nSOBRENOME LOZANO GOMES\nNOME NICOLAS\nNACIONALIDADE BRASILEIRO\nDATA DO NASCIMENTO 15 JUL/JUL 1999",
+    "expected": {
+      "documento": "F0962540",
+      "nacimiento": "1999-07-15",
+      "nacionalidadCode": "BRA",
+      "apellidoNombre": "LOZANO GOMES NICOLAS",
+      "autoApply": false,
+      "isGarbageMrz": true
+    }
+  }
+]

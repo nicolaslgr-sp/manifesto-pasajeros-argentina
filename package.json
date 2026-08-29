@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:biff": "node scripts/test-biff-patch.mjs"
+    "test:biff": "node scripts/test-biff-patch.mjs",
+    "test:ocr-real": "node scripts/test-ocr-real.mjs"
   },
   "dependencies": {
     "heic2any": "^0.0.4",
@@ -20,6 +21,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",
     "autoprefixer": "^10.4.20",
+    "canvas": "^3.2.3",
     "tailwindcss": "^4.0.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0",

@@ -96,6 +96,12 @@ export function datesFromViz(text) {
     iso = toIsoParts(m[1], MONTHS[m[2]], m[3]);
     if (iso && !out.includes(iso)) out.push(iso);
   }
+  const re2b = /(\d{1,2})\s+([A-Z]{3})\/[A-Z]{3}\s+(\d{2,4})/g;
+  while ((m = re2b.exec(u))) {
+    if (!MONTHS[m[2]]) continue;
+    iso = toIsoParts(m[1], MONTHS[m[2]], m[3]);
+    if (iso && !out.includes(iso)) out.push(iso);
+  }
   const re3 = /(\d{4})\s*[\.\/\-]\s*(\d{1,2})\s*[\.\/\-]\s*(\d{1,2})/g;
   while ((m = re3.exec(u))) {
     iso = toIsoParts(m[3], m[2], m[1]);
@@ -154,15 +160,21 @@ export function looksLikeName(name) {
 export function afterLabel(text, labels) {
   const u = String(text || '').toUpperCase();
   for (const label of labels) {
-    const idx = u.indexOf(label);
-    if (idx < 0) continue;
-    const rest = u.slice(idx + label.length).replace(/^[\s:.\-\/]+/, '');
-    const lines = rest.split(/\n+/);
-    for (let j = 0; j < Math.min(3, lines.length); j++) {
-      const line = lines[j].replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-      if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE)/.test(line)) {
-        return line;
+    let idx = 0;
+    while ((idx = u.indexOf(label, idx)) >= 0) {
+      if (idx > 0 && /[A-ZÁÉÍÓÚ]/.test(u[idx - 1])) {
+        idx += label.length;
+        continue;
       }
+      const rest = u.slice(idx + label.length).replace(/^[\s:.\-\/]+/, '');
+      const lines = rest.split(/\n+/);
+      for (let j = 0; j < Math.min(3, lines.length); j++) {
+        const line = lines[j].replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE)/.test(line)) {
+          return line;
+        }
+      }
+      idx += label.length;
     }
   }
   return '';

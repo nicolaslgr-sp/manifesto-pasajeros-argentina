@@ -1,52 +1,90 @@
-import { makeMrzBand, makeVizBand } from './preprocess.js';
+import { makeMrzBand, makeVizBand, detectMrzBandY, isTwoPagePhoto } from './preprocess.js';
 import { ocrCanvas, ensureWorker } from './tesseract-client.js';
 import {
-  collectTd3Candidates, pickBestMrz, MRZ_CHARS
+  collectTd3Candidates, pickBestMrz, MRZ_CHARS,
+  isMrzQualityOk, isGarbageMrz
 } from '../mrz/parse.js';
-import { parseVIZ, mergeMrzAndViz, natLabel } from '../viz/parse-visual.js';
-import { NAT } from '../lib/constants.js';
+import { parseVIZ, mergeMrzAndViz, buildResultFromViz, natLabel } from '../viz/parse-visual.js';
 import { looksLikeName } from '../lib/dates.js';
 
-// Mesmos 7 jobs do monólito que funcionava (MRZ_JOBS_GALLERY)
-const STATIC_MRZ_JOBS = [
-  { y0: 0.55, y1: 0.99, mode: 'sharp', psms: ['6', '13'], wide: true },
-  { y0: 0.68, y1: 0.99, mode: 'contrast', psms: ['6', '11'], wide: true },
-  { y0: 0.73, y1: 0.93, mode: 'sharp', psms: ['6', '13'], wide: true },
-  { y0: 0.70, y1: 0.96, mode: 'otsu', psms: ['6', '7'], wide: true },
-  { y0: 0.62, y1: 1.0, mode: 'invert', psms: ['7', '13'], wide: true },
-  { y0: 0.73, y1: 0.93, mode: 'adaptive', psms: ['6'], wide: true },
-  { y0: 0.50, y1: 1.0, mode: 'stretch_otsu', psms: ['13'], wide: true }
+/** Jobs MRZ no fundo — evita y>0.95 (borda/vazio) e VIZ no meio. */
+const BOTTOM_MRZ_JOBS = [
+  { y0: 0.86, y1: 0.98, mode: 'contrast', psms: ['6', '7', '13'], wide: true },
+  { y0: 0.88, y1: 1.0, mode: 'sharp', psms: ['6', '7', '13'], wide: true },
+  { y0: 0.90, y1: 1.0, mode: 'otsu', psms: ['6', '13'], wide: true },
+  { y0: 0.85, y1: 0.97, mode: 'stretch_otsu', psms: ['7', '13'], wide: true },
+  { y0: 0.87, y1: 0.99, mode: 'adaptive', psms: ['6', '7'], wide: true },
+  { y0: 0.89, y1: 1.0, mode: 'invert', psms: ['6', '13'], wide: true }
 ];
 
+const SINGLE_PAGE_MRZ_JOBS = [
+  { y0: 0.78, y1: 0.99, mode: 'sharp', psms: ['6', '13'], wide: true },
+  { y0: 0.75, y1: 0.96, mode: 'otsu', psms: ['6', '7'], wide: true },
+  { y0: 0.80, y1: 1.0, mode: 'contrast', psms: ['6', '11'], wide: true },
+  { y0: 0.82, y1: 0.98, mode: 'adaptive', psms: ['6'], wide: true }
+];
+
+function looksLikeMrzText(text) {
+  const u = String(text || '').toUpperCase().replace(/\s/g, '');
+  if (u.length < 30) return false;
+  const fillers = (u.match(/</g) || []).length;
+  if (fillers >= 8 && (/P[<KCX]/.test(u) || /<<[A-Z]/.test(u))) return true;
+  // Fragmentos de linha 2: doc+nat+birth+sex
+  if (/[A-Z0-9]{7,9}.{0,3}[A-Z]{3}\d{6}[0-9][MF]/.test(u.replace(/</g, ''))) return true;
+  return fillers >= 15;
+}
+
 function considerText(text, pool) {
-  const list = collectTd3Candidates(text);
-  pool.push(...list);
+  if (!text) return pool;
+  if (looksLikeMrzText(text) || text.length > 60) {
+    pool.push(...collectTd3Candidates(text));
+  }
   return pool;
 }
 
-function hasUsableMrz(mrz) {
-  if (!mrz) return false;
-  return !!(
-    (mrz.apellidoNombre && mrz.apellidoNombre.trim()) ||
-    (mrz.documento && mrz.documento.length >= 5)
-  );
+function buildMrzJobs(frame, twoPage) {
+  const jobs = [];
+  const detected = detectMrzBandY(frame);
+  if (detected) {
+    // Nunca começar abaixo de 0.85; nunca só a última fatia da borda
+    let y0 = Math.min(0.92, Math.max(twoPage ? 0.85 : 0.75, detected.y0));
+    let y1 = Math.min(1, Math.max(detected.y1, y0 + 0.08));
+    if (y0 > 0.93) y0 = 0.88;
+    jobs.push(
+      { y0, y1, mode: 'contrast', psms: ['6', '7', '13'], wide: true, detected: true },
+      { y0, y1, mode: 'sharp', psms: ['6', '13'], wide: true, detected: true },
+      { y0, y1, mode: 'otsu', psms: ['6', '7'], wide: true, detected: true }
+    );
+  }
+  if (twoPage) jobs.push(...BOTTOM_MRZ_JOBS);
+  else {
+    jobs.push(...SINGLE_PAGE_MRZ_JOBS);
+    jobs.push(...BOTTOM_MRZ_JOBS.slice(0, 3));
+  }
+  return jobs;
 }
 
-async function readMrzFromStatic(frame, onStatus) {
-  await ensureWorker(onStatus);
-  const jobs = STATIC_MRZ_JOBS;
-  const pool = [];
+async function runMrzJobs(frame, jobs, pool, onStatus, dumps) {
+  let pass = 0;
+  const totalPsms = jobs.reduce((n, j) => n + j.psms.length, 0);
 
   for (let ji = 0; ji < jobs.length; ji++) {
     const job = jobs[ji];
-    onStatus?.(`Lendo MRZ (${ji + 1}/${jobs.length}, ${job.mode})…`);
     const best = pickBestMrz(pool);
-    if (best?.score >= 82 && best.docCheckOk && best.birthCheckOk && best.compositeOk && looksLikeName(best.apellidoNombre)) {
+    if (best?.docCheckOk && best?.birthCheckOk && best?.compositeOk && looksLikeName(best.apellidoNombre)) {
       return best;
     }
+    if (best?.score >= 82 && best.docCheckOk && best.birthCheckOk && best.compositeOk) {
+      return best;
+    }
+
     for (const psm of job.psms) {
+      pass++;
+      const tag = job.detected ? 'auto' : job.mode;
+      onStatus?.(`Lendo MRZ (${pass}/${totalPsms}, ${tag}, y=${job.y0.toFixed(2)})…`);
       const band = makeMrzBand(frame, job.y0, job.y1, job.mode, job.wide);
       const text = await ocrCanvas(band, psm, MRZ_CHARS);
+      if (dumps) dumps.push({ kind: 'mrz', y0: job.y0, mode: job.mode, psm, text: (text || '').slice(0, 200) });
       considerText(text, pool);
       const candidate = pickBestMrz(pool);
       if (candidate?.docCheckOk && candidate?.birthCheckOk && candidate?.compositeOk) {
@@ -57,48 +95,108 @@ async function readMrzFromStatic(frame, onStatus) {
   return pickBestMrz(pool);
 }
 
-async function readVizFromStatic(frame, onStatus) {
-  const vizChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ÑñÁÉÍÓÚáéíóúÃÕãõÇç /.-:';
-  onStatus?.('Lendo nome, data e nacionalidade impressos na página…');
-  let band = makeVizBand(frame, 0.02, 0.82, 'contrast');
-  let text = await ocrCanvas(band, '4', vizChars);
-  if (!text || text.replace(/\s/g, '').length <= 20) {
-    onStatus?.('Tentando outro contraste na zona visual…');
-    band = makeVizBand(frame, 0.02, 0.86, 'otsu');
-    text = await ocrCanvas(band, '6', vizChars);
-  }
-  return text || '';
+async function readMrzFromStatic(frame, onStatus, twoPage, dumps) {
+  await ensureWorker(onStatus);
+  const jobs = buildMrzJobs(frame, twoPage);
+  const pool = [];
+  return runMrzJobs(frame, jobs, pool, onStatus, dumps);
 }
 
-export async function readPassportFromStaticImage(frame, onStatus) {
-  onStatus?.('Analisando foto completa do passaporte…');
-  const mrz = await readMrzFromStatic(frame, onStatus);
-  if (!hasUsableMrz(mrz)) return null;
+async function readVizFromStatic(frame, onStatus, twoPage, dumps) {
+  const vizChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789ÑñÁÉÍÓÚáéíóúÃÕãõÇç /.-:()';
+  // 2 páginas: página de dados (evitar assinatura e borda inferior vazia)
+  const crops = twoPage
+    ? [
+      { y0: 0.48, y1: 0.92, mode: 'contrast', psm: '4' },
+      { y0: 0.50, y1: 0.90, mode: 'contrast', psm: '6' },
+      { y0: 0.52, y1: 0.88, mode: 'otsu', psm: '6' },
+      { y0: 0.55, y1: 0.78, mode: 'contrast', psm: '4' },
+      { y0: 0.70, y1: 0.95, mode: 'contrast', psm: '6' }
+    ]
+    : [
+      { y0: 0.02, y1: 0.82, mode: 'contrast', psm: '4' },
+      { y0: 0.02, y1: 0.86, mode: 'otsu', psm: '6' },
+      { y0: 0.05, y1: 0.80, mode: 'contrast', psm: '6' }
+    ];
 
-  if ((mrz.score || 0) < 40) {
-    mrz.checks = mrz.checks || [];
-    mrz.checks.unshift('Leitura parcial — confira todos os campos no passaporte.');
+  let bestText = '';
+  const parts = [];
+  for (let i = 0; i < crops.length; i++) {
+    onStatus?.(`Lendo página impressa (${i + 1}/${crops.length})…`);
+    const band = makeVizBand(frame, crops[i].y0, crops[i].y1, crops[i].mode);
+    const text = await ocrCanvas(band, crops[i].psm, vizChars);
+    if (dumps) dumps.push({ kind: 'viz', y0: crops[i].y0, mode: crops[i].mode, text: (text || '').slice(0, 400) });
+    if (text && text.replace(/\s/g, '').length > 15) parts.push(text);
+    if ((text || '').replace(/\s/g, '').length > bestText.replace(/\s/g, '').length) {
+      bestText = text;
+    }
+  }
+  // Concatenar todas as leituras — cada crop pode trazer um campo diferente
+  const merged = parts.length ? parts.join('\n') : bestText;
+  return merged || '';
+}
+
+export async function readPassportFromStaticImage(frame, onStatus, options = {}) {
+  const dumps = options.debugDump ? [] : null;
+  onStatus?.('Analisando foto completa do passaporte…');
+  const twoPage = isTwoPagePhoto(frame);
+  if (twoPage) onStatus?.('Foto com 2 páginas — MRZ só no fundo (y≥0.90)…');
+
+  await ensureWorker(onStatus);
+
+  // 1) MRZ no fundo primeiro
+  onStatus?.('Lendo faixa MRZ (pode levar ~1–2 min)…');
+  let mrz = await readMrzFromStatic(frame, onStatus, twoPage, dumps);
+
+  if (mrz && isGarbageMrz(mrz)) {
+    onStatus?.('MRZ ilegível — lendo página impressa…');
+    mrz = null;
   }
 
-  onStatus?.(`MRZ: ${natLabel(mrz.nacionalidadCode, mrz.nacionalidad) || 'nacionalidad pendente'}. Conferindo texto impresso…`);
+  // 2) VIZ na página de dados (+ possível fragmento MRZ no texto)
+  const vizText = await readVizFromStatic(frame, onStatus, twoPage, dumps);
+  const fromVizPool = [];
+  considerText(vizText, fromVizPool);
+  const mrzFromViz = pickBestMrz(fromVizPool);
+  if (mrzFromViz && isMrzQualityOk(mrzFromViz) && (!mrz || isGarbageMrz(mrz))) {
+    mrz = mrzFromViz;
+  }
 
-  try {
-    const vizText = await readVizFromStatic(frame, onStatus);
-    const viz = parseVIZ(vizText, mrz);
-    const merged = mergeMrzAndViz(mrz, viz);
+  const viz = parseVIZ(vizText, mrz);
+
+  if (mrz && isMrzQualityOk(mrz)) {
+    onStatus?.(`MRZ OK: ${natLabel(mrz.nacionalidadCode, mrz.nacionalidad) || 'conferindo…'}. Cruzando com página…`);
+    const vizWithMrz = parseVIZ(vizText, mrz);
+    const merged = mergeMrzAndViz(mrz, vizWithMrz);
     if (merged) {
       onStatus?.(`Nacionalidad: ${natLabel(merged.nacionalidadCode, merged.nacionalidad) || 'confira no passaporte'}`);
     }
+    if (options.debugDump) return { result: merged, dumps };
     return merged;
-  } catch {
-    mrz.nacionalidad = NAT[mrz.nacionalidadCode] || mrz.nacionalidad || '';
-    mrz.checks = mrz.checks || [];
-    mrz.checks.push(`A página não pôde ser lida; nacionalidad veio da MRZ: ${natLabel(mrz.nacionalidadCode, mrz.nacionalidad) || '—'}.`);
-    return mrz;
   }
+
+  onStatus?.('Conferindo nome, data e passaporte na página impressa…');
+  const vizResult = buildResultFromViz(viz);
+  if (vizResult) {
+    onStatus?.(`Lido da página: ${natLabel(vizResult.nacionalidadCode, vizResult.nacionalidad)}`);
+    if (options.debugDump) return { result: vizResult, dumps };
+    return vizResult;
+  }
+
+  if (mrz && !isGarbageMrz(mrz)) {
+    const vizWithMrz = parseVIZ(vizText, mrz);
+    const merged = mergeMrzAndViz(mrz, vizWithMrz);
+    if (merged && !isGarbageMrz(merged)) {
+      if (options.debugDump) return { result: merged, dumps };
+      return merged;
+    }
+  }
+
+  if (options.debugDump) return { result: null, dumps };
+  return null;
 }
 
 export async function readMrzFromText(raw) {
   const list = collectTd3Candidates(raw);
-  return list.length ? list[0] : null;
+  return list.length ? pickBestMrz(list) : null;
 }
