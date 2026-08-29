@@ -117,11 +117,14 @@ function setPanelVisible(id, visible) {
 
 function scanErrorMessage(err) {
   const msg = String(err?.message || err || '');
-  if (/tesseract|worker|wasm|network|fetch/i.test(msg)) {
-    return 'Motor OCR não carregou. Recarregue a página e tente de novo.';
+  if (/timeout|não carregou/i.test(msg)) {
+    return msg;
+  }
+  if (/tesseract|worker|wasm|network|fetch|Failed to fetch|CDN/i.test(msg)) {
+    return 'Motor OCR não carregou (rede ou bloqueio). Abra no Chrome/Safari do sistema, recarregue e tente de novo.';
   }
   if (/heic|heif/i.test(msg)) {
-    return 'Não consegui converter a foto HEIC. Tente outra imagem ou JPEG.';
+    return msg.includes('JPEG') ? msg : 'Não consegui converter a foto HEIC. Tente JPEG ou PNG.';
   }
   return msg || 'Falha ao ler a foto.';
 }
@@ -131,7 +134,7 @@ function openScanPanel(targetId = null) {
   setPanelVisible('scan-panel', true);
   setPanelVisible('scan-confirm', false);
   pendingParsed = null;
-  setScanStatus('Toque em Galeria / Foto e escolha a foto completa da página do passaporte.');
+  setScanStatus('Toque em Galeria / Foto — use Chrome (Mac/Windows/Android) ou Safari no iPhone, fora do WhatsApp.');
 }
 
 function closeScanPanel() {
@@ -143,16 +146,16 @@ function closeScanPanel() {
 
 function showConfirm(parsed) {
   pendingParsed = parsed;
-  $('cf-nombre').textContent = parsed.apellidoNombre || '—';
+  $('cf-nombre').value = parsed.apellidoNombre || '';
   $('cf-nacim').value = isValidIsoDate(parsed.nacimiento) ? parsed.nacimiento : '';
-  $('cf-nacio').textContent = natLabel(parsed.nacionalidadCode, parsed.nacionalidad) || '—';
-  $('cf-doc').textContent = parsed.documento || '—';
+  $('cf-nacio').value = NAT[parsed.nacionalidadCode] || parsed.nacionalidad || '';
+  $('cf-doc').value = parsed.documento || '';
   $('cf-raw').textContent = `${parsed.line1 || ''}\n${parsed.line2 || ''}`;
   const checks = [...(parsed.checks || [])];
   if (!parsed.nacimiento) checks.unshift('Fecha de nacimiento não veio completa — preencha acima.');
   $('cf-note').textContent = checks.join(' ');
   setPanelVisible('scan-confirm', true);
-  setScanStatus(`Confira: ${natLabel(parsed.nacionalidadCode, parsed.nacionalidad) || 'nacionalidad'}`);
+  setScanStatus(`Confira: ${NAT[parsed.nacionalidadCode] || parsed.nacionalidad || 'nacionalidad'}`);
 }
 
 function applyParsed(parsed) {
@@ -189,11 +192,22 @@ function finishScanResult(result) {
     setScanStatus('Não consegui ler com segurança. Tente foto só da página de dados, com boa luz e sem reflexo.');
     return;
   }
-  if (isGarbageName(result.apellidoNombre) && !result.fromVizOnly) {
+  // VIZ parcial / completo: sempre abre conferência se não estiver pronto para auto-aplicar
+  if (result.fromVizOnly) {
+    if (isAutoApplyReady(result)) {
+      setScanStatus(`Leitura validada — ${natLabel(result.nacionalidadCode, result.nacionalidad)}. Adicionando…`);
+      applyParsed(result);
+      return;
+    }
+    setScanStatus('Leitura parcial — confira e complete os campos.');
+    showConfirm(result);
+    return;
+  }
+  if (isGarbageName(result.apellidoNombre)) {
     setScanStatus('Leitura incorreta detectada. Tente outra foto — de preferência só a página de dados, ou mais perto da MRZ.');
     return;
   }
-  if (isGarbageMrz(result) && !result.fromVizOnly && !result.documento) {
+  if (isGarbageMrz(result) && !result.documento) {
     setScanStatus('Não consegui ler o passaporte. Tente outra foto com a página inteira e boa iluminação.');
     return;
   }
@@ -211,7 +225,7 @@ async function processGalleryFile(file) {
   setScanStatus('Carregando foto…');
   try {
     const frame = await loadStaticImage(file);
-    setScanStatus('Processando imagem fixa (pode levar ~15s)…');
+    setScanStatus('Processando foto (no celular ~20–40s; no Chrome desktop pode ser mais rápido)…');
     const result = await readPassportFromStaticImage(frame, setScanStatus);
     finishScanResult(result);
   } catch (e) {
@@ -271,7 +285,10 @@ function bindEvents() {
 
   $('scan-accept').onclick = () => {
     if (pendingParsed) {
+      pendingParsed.apellidoNombre = $('cf-nombre').value || pendingParsed.apellidoNombre;
       pendingParsed.nacimiento = $('cf-nacim').value || pendingParsed.nacimiento;
+      pendingParsed.nacionalidad = $('cf-nacio').value || pendingParsed.nacionalidad;
+      pendingParsed.documento = ($('cf-doc').value || pendingParsed.documento || '').replace(/^PASAPORTE\s+/i, '');
       applyParsed(pendingParsed);
     }
   };

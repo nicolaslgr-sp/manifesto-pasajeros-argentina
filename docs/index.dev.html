@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#1e3a5f" />
   <title>Manifiesto de Pasajeros — Argentina</title>
-  <script type="module" crossorigin src="/manifesto-pasajeros-argentina/assets/main-CWRzolCd.js"></script>
+  <script type="module" crossorigin src="/manifesto-pasajeros-argentina/assets/main-CQGPaW7R.js"></script>
   <link rel="stylesheet" crossorigin href="/manifesto-pasajeros-argentina/assets/main-D3FqYe3m.css">
 </head>
 <body class="text-slate-800">
@@ -114,13 +114,13 @@
       <p id="scan-status" class="text-sm text-white/90 min-h-[2rem]">Aguardando foto…</p>
 
       <button type="button" id="scan-gallery" class="w-full rounded-xl bg-amber-400 text-navy-900 font-semibold py-3">Galeria / Foto</button>
-      <input id="scan-file" type="file" accept="image/jpeg,image/png,image/heic,image/heif,image/*" class="file-visually-hidden" tabindex="-1" />
+      <input id="scan-file" type="file" accept="image/*,image/jpeg,image/png,image/heic,image/heif" class="file-visually-hidden" tabindex="-1" />
 
       <div id="scan-confirm" hidden class="bg-white text-slate-900 rounded-2xl p-4 space-y-3">
-        <p class="text-sm text-slate-600">Conferência — olhe no passaporte:</p>
+        <p class="text-sm text-slate-600">Conferência — olhe no passaporte e corrija se precisar:</p>
         <div>
           <p class="text-[11px] uppercase tracking-wide text-slate-500">Apellido y Nombre</p>
-          <p id="cf-nombre" class="text-lg font-semibold"></p>
+          <input id="cf-nombre" class="mt-1 w-full rounded-xl border px-3 py-2 text-lg font-semibold" />
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
@@ -129,12 +129,12 @@
           </div>
           <div>
             <p class="text-[11px] uppercase tracking-wide text-slate-500">Nacionalidad</p>
-            <p id="cf-nacio" class="font-semibold"></p>
+            <input id="cf-nacio" class="mt-1 w-full rounded-xl border px-3 py-2 font-semibold" />
           </div>
         </div>
         <div>
-          <p class="text-[11px] uppercase tracking-wide text-slate-500">Passaporte</p>
-          <p id="cf-doc" class="font-semibold"></p>
+          <p class="text-[11px] uppercase tracking-wide text-slate-500">Passaporte (nº)</p>
+          <input id="cf-doc" class="mt-1 w-full rounded-xl border px-3 py-2 font-semibold" />
         </div>
         <p id="cf-note" class="text-xs text-slate-600"></p>
         <pre id="cf-raw" class="text-[10px] font-mono bg-slate-100 rounded-lg p-2 overflow-x-auto"></pre>
@@ -150,7 +150,7 @@
     </div>
 
     <div class="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-[10px] text-white/50">
-      Dados ficam só neste iPhone. Nada é enviado para servidor.
+      Dados ficam só neste aparelho. Nada é enviado para servidor. Use Chrome (Mac/Windows/Android) ou Safari no iPhone.
     </div>
   </div>
 

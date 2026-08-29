@@ -2,9 +2,10 @@ import { makeMrzBand, makeVizBand, detectMrzBandY, isTwoPagePhoto } from './prep
 import { ocrCanvas, ensureWorker } from './tesseract-client.js';
 import {
   collectTd3Candidates, pickBestMrz, MRZ_CHARS,
-  isMrzQualityOk, isGarbageMrz
+  isMrzQualityOk, isGarbageMrz, isAutoApplyReady
 } from '../mrz/parse.js';
 import { parseVIZ, mergeMrzAndViz, buildResultFromViz, natLabel } from '../viz/parse-visual.js';
+import { NAT } from '../lib/constants.js';
 import { looksLikeName } from '../lib/dates.js';
 
 /** Jobs MRZ no fundo — evita y>0.95 (borda/vazio) e VIZ no meio. */
@@ -24,6 +25,21 @@ const SINGLE_PAGE_MRZ_JOBS = [
   { y0: 0.82, y1: 0.98, mode: 'adaptive', psms: ['6'], wide: true }
 ];
 
+/** Mobile / viewport estreito — cap de passes MRZ (mesma lógica de leitura). */
+export function isConstrainedDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    try {
+      if (window.matchMedia('(max-width: 900px)').matches) return true;
+    } catch {
+      /* ignore */
+    }
+  }
+  return false;
+}
+
 function looksLikeMrzText(text) {
   const u = String(text || '').toUpperCase().replace(/\s/g, '');
   if (u.length < 30) return false;
@@ -42,7 +58,7 @@ function considerText(text, pool) {
   return pool;
 }
 
-function buildMrzJobs(frame, twoPage) {
+function buildMrzJobs(frame, twoPage, light) {
   const jobs = [];
   const detected = detectMrzBandY(frame);
   if (detected) {
@@ -61,12 +77,19 @@ function buildMrzJobs(frame, twoPage) {
     jobs.push(...SINGLE_PAGE_MRZ_JOBS);
     jobs.push(...BOTTOM_MRZ_JOBS.slice(0, 3));
   }
+  if (light) {
+    // Prioriza detecção + primeiros fundos; corta o restante
+    return jobs.slice(0, Math.min(jobs.length, 4));
+  }
   return jobs;
 }
 
-async function runMrzJobs(frame, jobs, pool, onStatus, dumps) {
+async function runMrzJobs(frame, jobs, pool, onStatus, dumps, maxPasses = Infinity) {
   let pass = 0;
-  const totalPsms = jobs.reduce((n, j) => n + j.psms.length, 0);
+  const totalPsms = Math.min(
+    maxPasses,
+    jobs.reduce((n, j) => n + j.psms.length, 0)
+  );
 
   for (let ji = 0; ji < jobs.length; ji++) {
     const job = jobs[ji];
@@ -79,6 +102,7 @@ async function runMrzJobs(frame, jobs, pool, onStatus, dumps) {
     }
 
     for (const psm of job.psms) {
+      if (pass >= maxPasses) return pickBestMrz(pool);
       pass++;
       const tag = job.detected ? 'auto' : job.mode;
       onStatus?.(`Lendo MRZ (${pass}/${totalPsms}, ${tag}, y=${job.y0.toFixed(2)})…`);
@@ -95,11 +119,11 @@ async function runMrzJobs(frame, jobs, pool, onStatus, dumps) {
   return pickBestMrz(pool);
 }
 
-async function readMrzFromStatic(frame, onStatus, twoPage, dumps) {
+async function readMrzFromStatic(frame, onStatus, twoPage, dumps, { light = false, maxPasses = Infinity } = {}) {
   await ensureWorker(onStatus);
-  const jobs = buildMrzJobs(frame, twoPage);
+  const jobs = buildMrzJobs(frame, twoPage, light);
   const pool = [];
-  return runMrzJobs(frame, jobs, pool, onStatus, dumps);
+  return runMrzJobs(frame, jobs, pool, onStatus, dumps, maxPasses);
 }
 
 async function readVizFromStatic(frame, onStatus, twoPage, dumps) {
@@ -111,12 +135,15 @@ async function readVizFromStatic(frame, onStatus, twoPage, dumps) {
       { y0: 0.50, y1: 0.90, mode: 'contrast', psm: '6' },
       { y0: 0.52, y1: 0.88, mode: 'otsu', psm: '6' },
       { y0: 0.55, y1: 0.78, mode: 'contrast', psm: '4' },
+      { y0: 0.58, y1: 0.82, mode: 'sharp', psm: '6' },
+      { y0: 0.62, y1: 0.86, mode: 'contrast', psm: '11' },
       { y0: 0.70, y1: 0.95, mode: 'contrast', psm: '6' }
     ]
     : [
       { y0: 0.02, y1: 0.82, mode: 'contrast', psm: '4' },
       { y0: 0.02, y1: 0.86, mode: 'otsu', psm: '6' },
-      { y0: 0.05, y1: 0.80, mode: 'contrast', psm: '6' }
+      { y0: 0.05, y1: 0.80, mode: 'contrast', psm: '6' },
+      { y0: 0.10, y1: 0.55, mode: 'sharp', psm: '4' }
     ];
 
   let bestText = '';
@@ -133,28 +160,18 @@ async function readVizFromStatic(frame, onStatus, twoPage, dumps) {
   }
   // Concatenar todas as leituras — cada crop pode trazer um campo diferente
   const merged = parts.length ? parts.join('\n') : bestText;
+  if (typeof window !== 'undefined' && window.__OCR_DEBUG) {
+    console.log('VIZ_DEBUG', (merged || '').slice(0, 2500));
+  }
   return merged || '';
 }
 
-export async function readPassportFromStaticImage(frame, onStatus, options = {}) {
-  const dumps = options.debugDump ? [] : null;
-  onStatus?.('Analisando foto completa do passaporte…');
-  const twoPage = isTwoPagePhoto(frame);
-  if (twoPage) onStatus?.('Foto com 2 páginas — MRZ só no fundo (y≥0.90)…');
-
-  await ensureWorker(onStatus);
-
-  // 1) MRZ no fundo primeiro
-  onStatus?.('Lendo faixa MRZ (pode levar ~1–2 min)…');
-  let mrz = await readMrzFromStatic(frame, onStatus, twoPage, dumps);
-
+function finalizeWithMrzViz(mrz, vizText, onStatus, dumps, options) {
   if (mrz && isGarbageMrz(mrz)) {
-    onStatus?.('MRZ ilegível — lendo página impressa…');
+    onStatus?.('MRZ ilegível — usando página impressa…');
     mrz = null;
   }
 
-  // 2) VIZ na página de dados (+ possível fragmento MRZ no texto)
-  const vizText = await readVizFromStatic(frame, onStatus, twoPage, dumps);
   const fromVizPool = [];
   considerText(vizText, fromVizPool);
   const mrzFromViz = pickBestMrz(fromVizPool);
@@ -192,8 +209,79 @@ export async function readPassportFromStaticImage(frame, onStatus, options = {})
     }
   }
 
+  // Resultado parcial do VIZ para conferência editável
+  if (viz && (viz.documento || viz.nacimiento || viz.apellidoNombre || viz.nacionalidadCode)) {
+    const partial = {
+      tipo: 'PASAPORTE',
+      documento: viz.documento || '',
+      apellidoNombre: viz.apellidoNombre || '',
+      nacimiento: viz.nacimiento || '',
+      nacionalidadCode: viz.nacionalidadCode || '',
+      nacionalidad: viz.nacionalidadCode && NAT[viz.nacionalidadCode]
+        ? NAT[viz.nacionalidadCode]
+        : (viz.nacionalidad || ''),
+      docCheckOk: false,
+      birthCheckOk: false,
+      compositeOk: false,
+      fromVizOnly: true,
+      score: 40,
+      checks: ['Leitura parcial — confira e complete os campos.']
+    };
+    if (options.debugDump) return { result: partial, dumps };
+    return partial;
+  }
+
   if (options.debugDump) return { result: null, dumps };
   return null;
+}
+
+export async function readPassportFromStaticImage(frame, onStatus, options = {}) {
+  const dumps = options.debugDump ? [] : null;
+  onStatus?.('Analisando foto completa do passaporte…');
+  const twoPage = isTwoPagePhoto(frame);
+  if (twoPage) onStatus?.('Foto com 2 páginas — priorizando página de dados…');
+
+  const constrained = options.forceMobilePipeline
+    ?? (twoPage || isConstrainedDevice());
+
+  await ensureWorker(onStatus);
+
+  // Mobile / 2 páginas: VIZ primeiro → se 4 campos OK, retorna; senão MRZ leve
+  if (constrained) {
+    onStatus?.('Lendo página impressa primeiro (mais rápido no celular)…');
+    const vizText = await readVizFromStatic(frame, onStatus, twoPage, dumps);
+
+    const earlyPool = [];
+    considerText(vizText, earlyPool);
+    let mrzEarly = pickBestMrz(earlyPool);
+    if (mrzEarly && isGarbageMrz(mrzEarly)) mrzEarly = null;
+
+    const vizEarly = parseVIZ(vizText, mrzEarly && isMrzQualityOk(mrzEarly) ? mrzEarly : null);
+    const vizResult = buildResultFromViz(vizEarly);
+    if (vizResult && (isAutoApplyReady(vizResult) || (
+      (vizResult.documento || '').length >= 5
+      && vizResult.nacimiento
+      && looksLikeName(vizResult.apellidoNombre)
+      && vizResult.nacionalidadCode
+    ))) {
+      onStatus?.(`Lido da página: ${natLabel(vizResult.nacionalidadCode, vizResult.nacionalidad)}`);
+      if (options.debugDump) return { result: vizResult, dumps };
+      return vizResult;
+    }
+
+    onStatus?.('Complementando com faixa MRZ (modo rápido)…');
+    const mrz = await readMrzFromStatic(frame, onStatus, twoPage, dumps, {
+      light: true,
+      maxPasses: 8
+    });
+    return finalizeWithMrzViz(mrz, vizText, onStatus, dumps, options);
+  }
+
+  // Desktop / página única: MRZ completo depois VIZ
+  onStatus?.('Lendo faixa MRZ (pode levar ~1–2 min)…');
+  const mrz = await readMrzFromStatic(frame, onStatus, twoPage, dumps);
+  const vizText = await readVizFromStatic(frame, onStatus, twoPage, dumps);
+  return finalizeWithMrzViz(mrz, vizText, onStatus, dumps, options);
 }
 
 export async function readMrzFromText(raw) {
