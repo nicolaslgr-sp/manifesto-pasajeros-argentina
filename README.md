@@ -18,11 +18,14 @@ Tudo roda **no navegador**. Dados ficam no `localStorage` do iPhone; fotos e pas
 
 ## Deploy (GitHub Pages)
 
-O site **deve** publicar a pasta `dist/` (build Vite), não o código-fonte.
+O site **deve** publicar o build Vite (`dist/`), não o código-fonte em `/src/`.
 
-1. GitHub → **Settings → Pages → Source: GitHub Actions**
-2. Cada push em `main` roda [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)
-3. Verifique que o site carrega `/manifesto-pasajeros-argentina/assets/main-*.js` (não `/src/main.js`)
+**Opção A (recomendada):** Settings → Pages → Source → **GitHub Actions**
+
+**Opção B:** Settings → Pages → Source → **Deploy from branch** → `main` → pasta **`/docs`**
+
+A pasta [`docs/`](docs/) contém o build pronto (gerado com `npm run build:pages`).  
+Verifique no site que o HTML referencia `/manifesto-pasajeros-argentina/assets/main-*.js` — **não** `/src/main.js`.
 
 
 ```bash
