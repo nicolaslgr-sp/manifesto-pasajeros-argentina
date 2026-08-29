@@ -30,10 +30,10 @@ Verifique no site que o HTML referencia `/manifesto-pasajeros-argentina/assets/m
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173/manifesto-pasajeros-argentina/
-npm test         # Vitest (MRZ, nacionalidade, Excel)
-npm run test:biff
-npm run build    # dist/ para GitHub Pages
+npm run dev      # http://localhost:5173/manifesto-pasajeros-argentina/ (usa index.dev.html)
+npm test
+npm run build:pages   # gera dist/, docs/ e publica build na raiz (index.html + assets/)
+npm run build
 ```
 
 ## Stack

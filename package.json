@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:pages": "vite build && rm -rf docs && cp -r dist docs && cp public/.nojekyll docs/.nojekyll 2>/dev/null || touch docs/.nojekyll",
+    "build:pages": "vite build && cp dist/index.dev.html dist/index.html && rm -rf docs assets && cp -r dist docs && cp public/.nojekyll docs/.nojekyll 2>/dev/null || touch docs/.nojekyll && cp dist/index.html index.html && cp -r dist/assets assets && mkdir -p template && cp public/template/manifesto-template.xls template/manifesto-template.xls",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
