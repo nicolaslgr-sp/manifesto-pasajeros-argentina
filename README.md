@@ -16,7 +16,14 @@ App web para preencher o **Manifiesto de Pasajeros** (Anexo I, Resolución 2997/
 
 Tudo roda **no navegador**. Dados ficam no `localStorage` do iPhone; fotos e passaportes **não são enviados** a nenhum servidor.
 
-## Desenvolvimento
+## Deploy (GitHub Pages)
+
+O site **deve** publicar a pasta `dist/` (build Vite), não o código-fonte.
+
+1. GitHub → **Settings → Pages → Source: GitHub Actions**
+2. Cada push em `main` roda [`.github/workflows/deploy-pages.yml`](.github/workflows/deploy-pages.yml)
+3. Verifique que o site carrega `/manifesto-pasajeros-argentina/assets/main-*.js` (não `/src/main.js`)
+
 
 ```bash
 npm install

@@ -108,17 +108,35 @@ function setScanBusy(on) {
   }
 }
 
+function setPanelVisible(id, visible) {
+  const el = $(id);
+  if (!el) return;
+  el.hidden = !visible;
+  el.classList.toggle('hidden', !visible);
+}
+
+function scanErrorMessage(err) {
+  const msg = String(err?.message || err || '');
+  if (/tesseract|worker|wasm|network|fetch/i.test(msg)) {
+    return 'Motor OCR não carregou. Recarregue a página e tente de novo.';
+  }
+  if (/heic|heif/i.test(msg)) {
+    return 'Não consegui converter a foto HEIC. Tente outra imagem ou JPEG.';
+  }
+  return msg || 'Falha ao ler a foto.';
+}
+
 function openScanPanel(targetId = null) {
   scanTargetId = targetId;
-  $('scan-panel').classList.remove('hidden');
-  $('scan-confirm').classList.add('hidden');
+  setPanelVisible('scan-panel', true);
+  setPanelVisible('scan-confirm', false);
   pendingParsed = null;
   setScanStatus('Toque em Galeria / Foto e escolha a foto completa da página do passaporte.');
 }
 
 function closeScanPanel() {
-  $('scan-panel').classList.add('hidden');
-  $('scan-confirm').classList.add('hidden');
+  setPanelVisible('scan-panel', false);
+  setPanelVisible('scan-confirm', false);
   pendingParsed = null;
   setScanBusy(false);
 }
@@ -133,7 +151,7 @@ function showConfirm(parsed) {
   const checks = [...(parsed.checks || [])];
   if (!parsed.nacimiento) checks.unshift('Fecha de nacimiento não veio completa — preencha acima.');
   $('cf-note').textContent = checks.join(' ');
-  $('scan-confirm').classList.remove('hidden');
+  setPanelVisible('scan-confirm', true);
   setScanStatus(`Confira: ${natLabel(parsed.nacionalidadCode, parsed.nacionalidad) || 'nacionalidad'}`);
 }
 
@@ -189,7 +207,8 @@ async function processGalleryFile(file) {
     const result = await readPassportFromStaticImage(frame, setScanStatus);
     finishScanResult(result);
   } catch (e) {
-    setScanStatus(e?.message || 'Falha ao ler a foto.');
+    console.error('OCR gallery error:', e);
+    setScanStatus(scanErrorMessage(e));
   } finally {
     setScanBusy(false);
   }
@@ -249,7 +268,7 @@ function bindEvents() {
     }
   };
   $('scan-retry').onclick = () => {
-    $('scan-confirm').classList.add('hidden');
+    setPanelVisible('scan-confirm', false);
     pendingParsed = null;
     setScanStatus('Escolha outra foto na Galeria.');
   };
