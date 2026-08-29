@@ -3,4 +3,5 @@
 .agent-tools/
 node_modules/
 .pydeps/
-package-lock.json
+dist/
+scripts/test-*.xls

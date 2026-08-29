@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-50: #eef3f8;
+  --color-navy-700: #1e3a5f;
+  --color-navy-800: #16304d;
+  --color-navy-900: #0f2340;
+}
+
+html, body {
+  background: #e8eef4;
+}
+
+input, select, textarea, button {
+  font-size: 16px;
+}
+
+.safe-bottom {
+  padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+}
+
+.file-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
