@@ -134,7 +134,7 @@ function openScanPanel(targetId = null) {
   setPanelVisible('scan-panel', true);
   setPanelVisible('scan-confirm', false);
   pendingParsed = null;
-  setScanStatus('Toque em Galeria / Foto — use Chrome (Mac/Windows/Android) ou Safari no iPhone, fora do WhatsApp.');
+  setScanStatus('Toque em Galeria / Foto — use Chrome (Mac/Windows/Android) ou Chrome/Safari no iPhone, fora do WhatsApp.');
 }
 
 function closeScanPanel() {

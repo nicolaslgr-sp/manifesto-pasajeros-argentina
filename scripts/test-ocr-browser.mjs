@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Gate OCR no browser: Playwright Chromium desktop + Pixel 7.
+ * Gate OCR no browser: Playwright Chromium desktop + Pixel 7 + WebKit (iPhone).
  * Upload tests/fixtures/real/nicolas-bra.jpg → espera F0962540 + 1999-07-15.
+ * WebKit = mesmo motor do Chrome iOS / Safari iPhone.
  */
 import { spawn } from 'child_process';
 import { createServer } from 'net';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
-import { chromium, devices } from 'playwright';
+import { chromium, webkit, devices } from 'playwright';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dir, '..');
@@ -197,22 +198,37 @@ async function main() {
   console.log('Preview:', appUrl);
   console.log('Fixture:', fixtureJpg);
 
-  const browser = await chromium.launch({ headless: true });
   let allOk = true;
 
+  const chromiumBrowser = await chromium.launch({ headless: true });
   try {
-    const desktopOk = await runProfile(browser, 'Chromium desktop (Chrome Mac/Windows)', {
+    const desktopOk = await runProfile(chromiumBrowser, 'Chromium desktop (Chrome Mac/Windows)', {
       viewport: { width: 1280, height: 800 }
     }, appUrl);
     allOk = allOk && desktopOk;
 
     const pixel = devices['Pixel 7'];
-    const mobileOk = await runProfile(browser, 'Chromium Pixel 7 (Chrome Android)', {
+    const mobileOk = await runProfile(chromiumBrowser, 'Chromium Pixel 7 (Chrome Android)', {
       ...pixel
     }, appUrl);
     allOk = allOk && mobileOk;
   } finally {
-    await browser.close();
+    await chromiumBrowser.close();
+  }
+
+  // WebKit = proxy Chrome iPhone / Safari iPhone (mesmo motor)
+  const webkitBrowser = await webkit.launch({ headless: true });
+  try {
+    const iphone = devices['iPhone 13'];
+    const webkitOk = await runProfile(
+      webkitBrowser,
+      'WebKit iPhone 13 (Chrome iOS / Safari)',
+      { ...iphone },
+      appUrl
+    );
+    allOk = allOk && webkitOk;
+  } finally {
+    await webkitBrowser.close();
     preview.kill('SIGTERM');
   }
 
@@ -220,7 +236,7 @@ async function main() {
     console.error('\nGate browser FALHOU');
     process.exit(1);
   }
-  console.log('\nGate browser OK — desktop + Pixel 7 (4/4)');
+  console.log('\nGate browser OK — desktop + Pixel 7 + WebKit iPhone (4/4)');
 }
 
 main().catch(err => {

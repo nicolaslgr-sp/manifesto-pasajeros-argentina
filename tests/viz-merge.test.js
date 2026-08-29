@@ -49,4 +49,15 @@ describe('VIZ parse + merge MRZ', () => {
     const viz = parseVIZ('PASSAPORTE N FO962540\nSOBRENOME LOZANO GOMES\nNOME NICOLAS', null);
     expect(viz.documento).toBe('F0962540');
   });
+
+  it('parseVIZ corrige FOPE2540 (OCR WebKit/Chrome iOS)', () => {
+    const viz = parseVIZ(
+      'FOPE2540\n15 JULIJUL\nNICOLAS\nLOZANO GOMES\nSRABILEIROA\n625407BRA9907157',
+      null
+    );
+    expect(viz.documento).toBe('F0962540');
+    expect(viz.nacimiento).toBe('1999-07-15');
+    expect(viz.nacionalidadCode).toBe('BRA');
+    expect(viz.apellidoNombre).toMatch(/LOZANO.*NICOLAS|LOZANO GOMES/);
+  });
 });

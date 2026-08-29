@@ -1,0 +1,25 @@
+MANIFESTO ARGENTINA — INICIO RAPIDO
+====================================
+
+Monterey: use o TERMINAL (nao clique nos .command)
+
+
+1. Terminal (Cmd+Espaço -> Terminal)
+
+2. Cole e Enter:
+
+cd ~/Downloads/manifesto-pasajeros-argentina
+
+3. Cole e Enter:
+
+python3 -m http.server 8765 --bind 0.0.0.0
+
+4. Veja o IP:
+
+ipconfig getifaddr en0
+
+5. iPhone (mesma Wi-Fi), Chrome ou Safari:
+
+http://SEU-IP:8765
+
+Detalhes e erros: LEIA-PRIMEIRO.txt

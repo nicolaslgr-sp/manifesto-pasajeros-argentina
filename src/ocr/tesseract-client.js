@@ -16,7 +16,7 @@ function isBrowser() {
 function browserWorkerOptions(onStatus) {
   return {
     workerPath: `https://cdn.jsdelivr.net/npm/tesseract.js@${TESS_VERSION}/dist/worker.min.js`,
-    // Non-SIMD: mais compatível em Android mid-range / Safari
+    // Non-SIMD: mais compatível em Android mid-range / Safari / Chrome iOS (WebKit)
     corePath: `https://cdn.jsdelivr.net/npm/tesseract.js-core@${CORE_VERSION}/tesseract-core.wasm.js`,
     langPath: 'https://tessdata.projectnaptha.com/4.0.0',
     logger: m => {

@@ -1,20 +1,22 @@
 # Manifesto de Pasajeros — Argentina
 
-App web para preencher o **Manifiesto de Pasajeros** (Anexo I, Resolución 2997/85), otimizada para **iPhone / Safari**.
+App web para preencher o **Manifiesto de Pasajeros** (Anexo I, Resolución 2997/85), otimizada para **Chrome** (Mac, Windows, Android, iPhone) e **Safari no iPhone**.
 
 **URL:** https://nicolaslgr-sp.github.io/manifesto-pasajeros-argentina/
 
 ## Uso no iPhone
 
 1. Tire a foto da **página inteira** do passaporte com o app **Câmera** (boa luz, sem reflexo).
-2. Abra o manifesto no Safari → toque **Galeria / Foto** → escolha essa foto.
-3. Aguarde a leitura (~10–20 s) e confira nome, data de nascimento, nacionalidade e passaporte.
+2. Abra o manifesto no **Chrome** ou no **Safari** do iPhone (não no WhatsApp) → toque **Galeria / Foto** → escolha essa foto.
+3. Aguarde a leitura (~20–40 s no celular) e confira nome, data de nascimento, nacionalidade e passaporte.
 4. Preencha cabeçalho e guia se necessário.
 5. Toque **Baixar Excel (.xls)** — o arquivo é o modelo oficial preenchido (ENTRADA + SALIDA).
 
+> No iPhone, Chrome e Safari usam o mesmo motor (WebKit). Prefira o app do sistema, não o navegador embutido do WhatsApp/Instagram.
+
 ## Privacidade
 
-Tudo roda **no navegador**. Dados ficam no `localStorage` do iPhone; fotos e passaportes **não são enviados** a nenhum servidor.
+Tudo roda **no navegador**. Dados ficam no `localStorage` do aparelho; fotos e passaportes **não são enviados** a nenhum servidor.
 
 ## Deploy (GitHub Pages)
 
@@ -34,6 +36,7 @@ npm run dev      # http://localhost:5173/manifesto-pasajeros-argentina/ (usa ind
 npm test
 npm run build:pages   # gera dist/, docs/ e publica build na raiz (index.html + assets/)
 npm run build
+npm run test:ocr-browser  # Chromium desktop + Pixel 7 + WebKit (proxy iPhone)
 ```
 
 ## Stack

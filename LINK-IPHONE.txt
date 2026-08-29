@@ -1,0 +1,22 @@
+MANIFESTO ARGENTINA — USAR NO IPHONE (SEM MAC)
+==============================================
+
+Link do app (abrir no Chrome ou Safari do iPhone):
+
+https://nicolaslgr-sp.github.io/manifesto-pasajeros-argentina/
+
+
+COMO INSTALAR NO IPHONE
+-----------------------
+1. Abra o link acima no Chrome ou no Safari (nao no WhatsApp)
+2. Na primeira vez, use internet (Wi-Fi ou 4G)
+3. Toque em Compartilhar (quadrado com seta)
+4. "Adicionar à Tela de Início"
+5. Confirme — vira um ícone como app
+
+Pronto. MacBook pode ficar DESLIGADO.
+
+
+REPOSITORIO (opcional)
+----------------------
+https://github.com/nicolaslgr-sp/manifesto-pasajeros-argentina

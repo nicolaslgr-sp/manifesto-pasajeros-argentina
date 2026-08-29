@@ -1,0 +1,78 @@
+LEIA PRIMEIRO — macOS Monterey
+================================
+
+ERRO "OPERATION NOT PERMITTED" ou "DANIFICADO"
+----------------------------------------------
+Nao jogue no lixo. Use o metodo abaixo (so Terminal + Python).
+
+
+METODO QUE FUNCIONA (copie linha por linha)
+-------------------------------------------
+
+1) Abra o Terminal:
+   Cmd + Espaco -> digite: Terminal -> Enter
+
+2) Cole a LINHA 1 e pressione Enter:
+
+cd ~/Downloads/manifesto-pasajeros-argentina
+
+   Se der erro "no such file", tente:
+
+cd ~/Desktop/manifesto-pasajeros-argentina
+
+   Ou: digite cd (com espaco) e ARRASTE a pasta para o Terminal, Enter.
+
+3) Cole a LINHA 2 e pressione Enter:
+
+python3 -m http.server 8765 --bind 0.0.0.0
+
+   Deixe o Terminal ABERTO (nao feche).
+
+4) Cole a LINHA 3 (outra janela ou antes da 2) para ver o endereco:
+
+ipconfig getifaddr en0
+
+   Vai aparecer algo como: 192.168.1.25
+
+5) No iPhone (mesma Wi-Fi), Chrome ou Safari:
+
+   http://192.168.1.25:8765
+   (troque pelo numero que apareceu no passo 4)
+
+6) Para parar: volte ao Terminal e pressione Ctrl + C
+
+
+SE A LINHA 2 DER "OPERATION NOT PERMITTED"
+------------------------------------------
+
+A) Preferencias do Sistema -> Seguranca e Privacidade -> Privacidade
+   -> Acesso total ao disco -> marque TERMINAL (cadeado, senha, reinicie Terminal)
+
+B) Ou: Privacidade -> Arquivos e Pastas -> Terminal
+   -> ative Downloads, Mesa, Documentos
+
+C) Mova a pasta para a area de trabalho e repita o passo 2 com:
+
+cd ~/Desktop/manifesto-pasajeros-argentina
+python3 -m http.server 8765 --bind 0.0.0.0
+
+
+SE DER "ADDRESS ALREADY IN USE"
+-------------------------------
+
+python3 -m http.server 8766 --bind 0.0.0.0
+
+No iPhone use :8766 no final do endereco.
+
+
+ATALHO (se bash iniciar.sh funcionar)
+-------------------------------------
+
+No Terminal, depois do cd na pasta:
+
+bash iniciar.sh
+
+
+NAO USE DOIS CLIQUES NOS ARQUIVOS .command
+------------------------------------------
+No Monterey eles costumam ser bloqueados. Use sempre o Terminal acima.

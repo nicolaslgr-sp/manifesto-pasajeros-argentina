@@ -15,6 +15,15 @@ function hamming(a, b) {
 function fixPassportOcr(num) {
   let s = String(num || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (/^FO\d{6,8}$/.test(s)) s = 'F0' + s.slice(2);
+  // WebKit/Safari: FOPE2540 → F0962540 (letras OCR no lugar de dígitos)
+  if (/^F[O0][A-Z0-9]{6,8}$/.test(s) && /[A-Z]/.test(s.slice(2))) {
+    const digitMap = {
+      O: '0', D: '0', Q: '0', I: '1', L: '1', Z: '2',
+      A: '4', S: '5', G: '6', C: '6', E: '6', B: '8', P: '9', T: '7'
+    };
+    const rest = s.slice(2).replace(/[A-Z]/g, ch => digitMap[ch] || '');
+    if (/^\d{6,8}$/.test(rest)) s = 'F0' + rest;
+  }
   return s;
 }
 
@@ -37,14 +46,28 @@ function passportFromLabel(text) {
 
 function passportFromNoise(text) {
   const u = String(text || '').toUpperCase();
-  const candidates = u.match(/\b[A-Z]?[O0]\d{6,8}\b|\b[A-Z]{1,2}\d{6,8}\b|\bFO\d{6,8}\b|\bF0\d{6,8}\b/g) || [];
+  const candidates = u.match(
+    /\bF[O0][A-Z0-9]{6,8}\b|\b[A-Z]?[O0]\d{6,8}\b|\b[A-Z]{1,2}\d{6,8}\b|\bFO\d{6,8}\b|\bF0\d{6,8}\b/g
+  ) || [];
   for (const n of candidates) {
     const fixed = fixPassportOcr(n);
     if (/^[A-Z]\d{7,8}$/.test(fixed) || /^[A-Z]{2}\d{6,7}$/.test(fixed)) return fixed;
   }
-  // OCR cola: FO962540 sem word boundary
-  const glued = u.match(/F[O0]\d{6,8}/);
-  if (glued) return fixPassportOcr(glued[0]);
+  // OCR cola: FO962540 / FOPE2540 sem word boundary
+  const glued = u.match(/F[O0][A-Z0-9]{6,8}/);
+  if (glued) {
+    const fixed = fixPassportOcr(glued[0]);
+    if (/^F0\d{6,8}$/.test(fixed)) return fixed;
+  }
+  // Fragmento MRZ: 9625407BRA… → F0962540
+  const beforeBra = u.match(/(?:F[O0])?(\d{7,8})BRA\d{5,7}/);
+  if (beforeBra) {
+    const d = beforeBra[1];
+    if (d.length >= 7) {
+      const cand = 'F0' + d.slice(0, 6);
+      if (/^F0\d{6}$/.test(cand)) return cand;
+    }
+  }
   return '';
 }
 
