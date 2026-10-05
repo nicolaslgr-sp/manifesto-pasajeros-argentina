@@ -5,7 +5,6 @@ import {
   isMrzQualityOk, isGarbageMrz, isAutoApplyReady
 } from '../mrz/parse.js';
 import { parseVIZ, mergeMrzAndViz, buildResultFromViz, natLabel } from '../viz/parse-visual.js';
-import { NAT } from '../lib/constants.js';
 import { looksLikeName } from '../lib/dates.js';
 
 /** Jobs MRZ no fundo — evita y>0.95 (borda/vazio) e VIZ no meio. */
@@ -209,26 +208,11 @@ function finalizeWithMrzViz(mrz, vizText, onStatus, dumps, options) {
     }
   }
 
-  // Resultado parcial do VIZ para conferência editável
-  if (viz && (viz.documento || viz.nacimiento || viz.apellidoNombre || viz.nacionalidadCode)) {
-    const partial = {
-      tipo: 'PASAPORTE',
-      documento: viz.documento || '',
-      apellidoNombre: viz.apellidoNombre || '',
-      nacimiento: viz.nacimiento || '',
-      nacionalidadCode: viz.nacionalidadCode || '',
-      nacionalidad: viz.nacionalidadCode && NAT[viz.nacionalidadCode]
-        ? NAT[viz.nacionalidadCode]
-        : (viz.nacionalidad || ''),
-      docCheckOk: false,
-      birthCheckOk: false,
-      compositeOk: false,
-      fromVizOnly: true,
-      score: 40,
-      checks: ['Leitura parcial — confira e complete os campos.']
-    };
-    if (options.debugDump) return { result: partial, dumps };
-    return partial;
+  // Qualquer campo útil → UI de confirmação (nome / data / nat / doc)
+  const vizPartial = buildResultFromViz(viz);
+  if (vizPartial) {
+    if (options.debugDump) return { result: vizPartial, dumps };
+    return vizPartial;
   }
 
   if (options.debugDump) return { result: null, dumps };

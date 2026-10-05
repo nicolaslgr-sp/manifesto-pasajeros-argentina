@@ -2,11 +2,12 @@ import {
   defaultState, loadState, saveState, uid, escapeHtml,
   GUIDE_NAME, PAX_MAX_TOTAL, NAT, crewCount, filledPax
 } from './lib/constants.js';
-import { toStoredNacimiento, isValidIsoDate, fmtDateBR } from './lib/dates.js';
-import { isAutoApplyReady, isGarbageMrz, isGarbageName } from './mrz/parse.js';
-import { natLabel } from './viz/parse-visual.js';
+import { isGarbageName } from './mrz/parse.js';
 import { loadStaticImage } from './ocr/static-image-loader.js';
 import { readPassportFromStaticImage, readMrzFromText } from './ocr/static-pipeline.js';
+import {
+  hasAnyPassportField, toConfirmFields, toPassengerPayload
+} from './lib/passenger-fields.js';
 import { generateExcel } from './excel/export.js';
 import * as BiffPatchExport from './excel/biff-patch-export.js';
 
@@ -134,7 +135,7 @@ function openScanPanel(targetId = null) {
   setPanelVisible('scan-panel', true);
   setPanelVisible('scan-confirm', false);
   pendingParsed = null;
-  setScanStatus('Toque em Galeria / Foto — use Chrome (Mac/Windows/Android) ou Chrome/Safari no iPhone, fora do WhatsApp.');
+  setScanStatus('Escolha a foto inteira da página do passaporte. Os 4 campos serão preenchidos para você conferir.');
 }
 
 function closeScanPanel() {
@@ -145,33 +146,53 @@ function closeScanPanel() {
 }
 
 function showConfirm(parsed) {
-  pendingParsed = parsed;
-  $('cf-nombre').value = parsed.apellidoNombre || '';
-  $('cf-nacim').value = isValidIsoDate(parsed.nacimiento) ? parsed.nacimiento : '';
-  $('cf-nacio').value = NAT[parsed.nacionalidadCode] || parsed.nacionalidad || '';
-  $('cf-doc').value = parsed.documento || '';
-  $('cf-raw').textContent = `${parsed.line1 || ''}\n${parsed.line2 || ''}`;
-  const checks = [...(parsed.checks || [])];
-  if (!parsed.nacimiento) checks.unshift('Fecha de nacimiento não veio completa — preencha acima.');
+  const cleaned = { ...parsed };
+  if (isGarbageName(cleaned.apellidoNombre)) {
+    cleaned.apellidoNombre = '';
+    cleaned.checks = [
+      ...(cleaned.checks || []),
+      'Nome não confiado — digite olhando o passaporte.'
+    ];
+  }
+
+  const fields = toConfirmFields(cleaned);
+  pendingParsed = { ...cleaned, ...fields };
+
+  $('cf-nombre').value = fields.apellidoNombre;
+  $('cf-nacim').value = fields.nacimiento;
+  $('cf-nacio').value = fields.nacionalidad;
+  $('cf-doc').value = fields.documento;
+  $('cf-raw').textContent = `${cleaned.line1 || ''}\n${cleaned.line2 || ''}`;
+
+  const checks = [...(cleaned.checks || [])];
+  if (!fields.apellidoNombre) checks.unshift('Preencha o nome.');
+  if (!fields.nacimiento) checks.unshift('Preencha a data de nascimento.');
+  if (!fields.nacionalidad) checks.unshift('Preencha a nacionalidad.');
+  if (!fields.documento) checks.unshift('Preencha o nº do passaporte.');
   $('cf-note').textContent = checks.join(' ');
+
   setPanelVisible('scan-confirm', true);
-  setScanStatus(`Confira: ${NAT[parsed.nacionalidadCode] || parsed.nacionalidad || 'nacionalidad'}`);
+  const filled = [fields.apellidoNombre, fields.nacimiento, fields.nacionalidad, fields.documento]
+    .filter(Boolean).length;
+  setScanStatus(`Confira os campos (${filled}/4 lidos da foto).`);
 }
 
-function applyParsed(parsed) {
-  if (!parsed) return;
-  const nac = toStoredNacimiento(parsed.nacimiento);
-  const payload = {
-    apellidoNombre: (parsed.apellidoNombre || '').toUpperCase(),
-    nacimiento: nac,
-    nacionalidad: NAT[parsed.nacionalidadCode] || parsed.nacionalidad || '',
-    documento: (`PASAPORTE ${parsed.documento || ''}`).trim(),
-    visa: 'sin'
+function applyFromConfirm() {
+  const fields = {
+    apellidoNombre: $('cf-nombre').value,
+    nacimiento: $('cf-nacim').value,
+    nacionalidad: $('cf-nacio').value,
+    documento: $('cf-doc').value
   };
+  const payload = toPassengerPayload(fields);
+  if (!payload.apellidoNombre && !payload.documento) {
+    setScanStatus('Informe pelo menos nome ou número do passaporte.');
+    return;
+  }
   if (scanTargetId) {
     const found = state.pasajeros.find(p => p.id === scanTargetId);
     if (found) {
-      if (!nac && found.nacimiento) delete payload.nacimiento;
+      if (!payload.nacimiento && found.nacimiento) delete payload.nacimiento;
       Object.assign(found, payload);
     }
   } else {
@@ -187,33 +208,12 @@ function applyParsed(parsed) {
   closeScanPanel();
 }
 
+/** Sempre abre confirmação com os 4 campos — nunca aplica em silêncio. */
 function finishScanResult(result) {
-  if (!result) {
-    setScanStatus('Não consegui ler com segurança. Tente foto só da página de dados, com boa luz e sem reflexo.');
-    return;
-  }
-  // VIZ parcial / completo: sempre abre conferência se não estiver pronto para auto-aplicar
-  if (result.fromVizOnly) {
-    if (isAutoApplyReady(result)) {
-      setScanStatus(`Leitura validada — ${natLabel(result.nacionalidadCode, result.nacionalidad)}. Adicionando…`);
-      applyParsed(result);
-      return;
-    }
-    setScanStatus('Leitura parcial — confira e complete os campos.');
-    showConfirm(result);
-    return;
-  }
-  if (isGarbageName(result.apellidoNombre)) {
-    setScanStatus('Leitura incorreta detectada. Tente outra foto — de preferência só a página de dados, ou mais perto da MRZ.');
-    return;
-  }
-  if (isGarbageMrz(result) && !result.documento) {
-    setScanStatus('Não consegui ler o passaporte. Tente outra foto com a página inteira e boa iluminação.');
-    return;
-  }
-  if (isAutoApplyReady(result)) {
-    setScanStatus(`Leitura validada — ${natLabel(result.nacionalidadCode, result.nacionalidad)}. Adicionando…`);
-    applyParsed(result);
+  if (!result || !hasAnyPassportField(result)) {
+    setScanStatus(
+      'Não consegui ler os dados. Tire outra foto da página inteira (boa luz) ou preencha manualmente abaixo.'
+    );
     return;
   }
   showConfirm(result);
@@ -283,15 +283,7 @@ function bindEvents() {
     if (file) processGalleryFile(file);
   });
 
-  $('scan-accept').onclick = () => {
-    if (pendingParsed) {
-      pendingParsed.apellidoNombre = $('cf-nombre').value || pendingParsed.apellidoNombre;
-      pendingParsed.nacimiento = $('cf-nacim').value || pendingParsed.nacimiento;
-      pendingParsed.nacionalidad = $('cf-nacio').value || pendingParsed.nacionalidad;
-      pendingParsed.documento = ($('cf-doc').value || pendingParsed.documento || '').replace(/^PASAPORTE\s+/i, '');
-      applyParsed(pendingParsed);
-    }
-  };
+  $('scan-accept').onclick = () => applyFromConfirm();
   $('scan-retry').onclick = () => {
     setPanelVisible('scan-confirm', false);
     pendingParsed = null;

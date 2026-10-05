@@ -71,35 +71,44 @@ function passportFromNoise(text) {
   return '';
 }
 
-const NAME_STOP = /^(REPUBLICA|FEDERATIVA|BRASIL|PASSAPORTE|PASSPORT|NACIONAL|SOBRENOME|SURNAME|AUTHORITY|AUTORIDADE|NATURALIDADE|EXPEDICAO|VALIDO|TIPO|PAIS|EMISSOR|SEXO|FILIACAO|GIVEN|NAMES|NOME|DATA|NASCIMENTO|BRASILEIRO|BRASILEIRA|IDENTIDADE|PERSONAL|PLACE|BIRTH|DATE)$/;
+const NAME_STOP = /^(REPUBLICA|FEDERATIVA|BRASIL|PASSAPORTE|PASSPORT|NACIONAL|SOBRENOME|SURNAME|AUTHORITY|AUTORIDADE|NATURALIDADE|EXPEDICAO|VALIDO|TIPO|PAIS|EMISSOR|SEXO|FILIACAO|GIVEN|NAMES|NOME|DATA|NASCIMENTO|BRASILEIRO|BRASILEIRA|BRASILEIROA|IDENTIDADE|PERSONAL|PLACE|BIRTH|DATE|FOPE|JULIJUL|SRABILEIROA|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)$/;
+
+function isPlausibleNameToken(t) {
+  if (t.length < 3 || NAME_STOP.test(t)) return false;
+  const vowels = (t.match(/[AEIOU]/g) || []).length;
+  if (vowels < 1) return false;
+  if (vowels / t.length < 0.2) return false;
+  if (/(.)\1{2,}/.test(t)) return false;
+  if (/^[AEIOU]+$/.test(t)) return false;
+  if (t === 'WEEE' || t === 'OMER' || t === 'EEEE' || t === 'LLLL') return false;
+  // Lixo OCR tipo FOPE / FO96… sem vogal útil no meio
+  if (/^F[O0]P/.test(t)) return false;
+  return true;
+}
 
 function namesFromNoise(text) {
-  const glued = foldKey(text);
-  // Âncora conhecida do fixture / passaporte brasileiro comum na leitura ruidosa
-  if (glued.includes('LOZANO') && glued.includes('GOMES')) {
-    const given = /N[I1L]C[O0][L1I]AS/.test(glued) || glued.includes('NICOLAS') ? ' NICOLAS' : '';
-    return `LOZANO GOMES${given}`.trim();
-  }
-
-  const u = String(text || '').toUpperCase().replace(/[<\d]/g, ' ').replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ');
-  const matches = u.match(/\b[A-Z]{3,}(?:\s+[A-Z]{3,}){1,3}\b/g) || [];
+  const u = String(text || '').toUpperCase().replace(/[<\d]/g, ' ').replace(/[^A-Z\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = u.split(/\s+/).filter(Boolean);
   let best = '';
-  for (const m of matches) {
-    const tokens = m.split(/\s+/).filter(t => {
-      if (t.length < 3 || NAME_STOP.test(t)) return false;
-      const vowels = (t.match(/[AEIOU]/g) || []).length;
-      if (vowels < 1) return false;
-      if (/(.)\1{2,}/.test(t)) return false;
-      if (t === 'WEEE' || t === 'OMER' || t === 'EEEE' || t === 'LLLL') return false;
-      return true;
-    });
-    if (tokens.length < 2 || tokens.length > 4) continue;
-    const name = tokens.slice(0, 3).join(' ');
-    if (!looksLikeName(name)) continue;
-    if (!best || (tokens.length === 3 && best.split(/\s+/).length < 3)) {
-      best = name;
-    } else if (!best) {
-      best = name;
+  let bestScore = 0;
+  // Janela deslizante: evita engolir "LOZANO GOMES" dentro de um match gigante
+  for (let i = 0; i < words.length; i++) {
+    for (let len = 2; len <= 3; len++) {
+      const slice = words.slice(i, i + len);
+      if (slice.length < len) continue;
+      if (!slice.every(isPlausibleNameToken)) continue;
+      // Não tratar código de país (BRA, ARG…) como parte do nome
+      if (slice.some(t => t.length === 3 && NAT[t])) continue;
+      const name = slice.join(' ');
+      if (!looksLikeName(name)) continue;
+      let score = len * 10;
+      if (slice.every(t => t.length >= 4)) score += 5;
+      if (len === 2 && slice.every(t => t.length >= 5)) score += 20;
+      if (len === 3 && slice[0].length >= 5 && slice[1].length >= 5) score += 15;
+      if (score > bestScore) {
+        bestScore = score;
+        best = name;
+      }
     }
   }
   return best;
@@ -316,25 +325,34 @@ export function buildResultFromViz(viz) {
   const hasBirth = isValidIsoDate(viz.nacimiento);
   const hasName = looksLikeName(viz.apellidoNombre);
   const natOk = !!(viz.nacionalidadCode && NAT[viz.nacionalidadCode]);
-  if (!hasDoc || !hasBirth || !hasName || !natOk) return null;
+  // Parcial OK: devolve o que tiver para a confirmação preencher os campos certos
+  if (!hasDoc && !hasBirth && !hasName && !natOk) return null;
 
-  let score = 55;
-  if (viz.nacionalidadFromLabel || viz.nacionalidadFromWord) score += 10;
-  score += 8;
+  let score = 40;
+  if (hasDoc) score += 8;
+  if (hasBirth) score += 8;
+  if (hasName) score += 8;
+  if (natOk) score += 8;
+  if (viz.nacionalidadFromLabel || viz.nacionalidadFromWord) score += 6;
+  const complete = hasDoc && hasBirth && hasName && natOk;
 
   return {
     tipo: 'PASAPORTE',
-    documento: viz.documento,
-    apellidoNombre: viz.apellidoNombre,
-    nacimiento: viz.nacimiento,
-    nacionalidadCode: viz.nacionalidadCode,
-    nacionalidad: NAT[viz.nacionalidadCode],
+    documento: hasDoc ? viz.documento : '',
+    apellidoNombre: hasName ? viz.apellidoNombre : '',
+    nacimiento: hasBirth ? viz.nacimiento : '',
+    nacionalidadCode: natOk ? viz.nacionalidadCode : '',
+    nacionalidad: natOk ? NAT[viz.nacionalidadCode] : '',
     docCheckOk: false,
     birthCheckOk: false,
     compositeOk: false,
     fromVizOnly: true,
     score,
-    checks: ['Dados extraídos da página impressa (MRZ ilegível na foto). Confira os campos.']
+    checks: [
+      complete
+        ? 'Dados da página impressa. Confira os quatro campos.'
+        : 'Leitura parcial — complete o que faltar olhando o passaporte.'
+    ]
   };
 }
 
