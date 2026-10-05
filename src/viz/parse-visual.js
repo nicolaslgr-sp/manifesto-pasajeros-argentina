@@ -4,6 +4,10 @@ import {
   nameCompatible, looksLikeName, isValidIsoDate, fmtDateBR, yymmddToIso
 } from '../lib/dates.js';
 import { natLabel, nationalityFromViz } from '../mrz/nationality.js';
+import {
+  SURNAME_LABELS, GIVEN_LABELS, FULL_NAME_LABELS, PASSPORT_LABELS,
+  isLabelStopWord
+} from '../mrz/viz-labels.js';
 
 function hamming(a, b) {
   if (a.length !== b.length) return 99;
@@ -29,13 +33,9 @@ function fixPassportOcr(num) {
 
 function passportFromLabel(text) {
   const u = String(text || '').toUpperCase();
-  const labels = [
-    'PASSAPORTE N', 'PASSAPORTE NO', 'PASSAPORTE Nº', 'PASSAPORTE N°',
-    'PASSPORT NO', 'PASSPORT N', 'PASSPORT Nº', 'PASSPORT N°',
-    'PASSAPORT N', 'Nº PASSAPORTE', 'NO PASSAPORTE'
-  ];
+  const labels = [...PASSPORT_LABELS].sort((a, b) => b.length - a.length);
   for (const label of labels) {
-    const idx = u.indexOf(label);
+    const idx = u.indexOf(label.toUpperCase());
     if (idx < 0) continue;
     const rest = u.slice(idx + label.length, idx + label.length + 50);
     const m = rest.match(/[A-Z0-9]{6,9}/);
@@ -71,10 +71,10 @@ function passportFromNoise(text) {
   return '';
 }
 
-const NAME_STOP = /^(REPUBLICA|FEDERATIVA|BRASIL|PASSAPORTE|PASSPORT|NACIONAL|SOBRENOME|SURNAME|AUTHORITY|AUTORIDADE|NATURALIDADE|EXPEDICAO|VALIDO|TIPO|PAIS|EMISSOR|SEXO|FILIACAO|GIVEN|NAMES|NOME|DATA|NASCIMENTO|BRASILEIRO|BRASILEIRA|BRASILEIROA|IDENTIDADE|PERSONAL|PLACE|BIRTH|DATE|FOPE|JULIJUL|SRABILEIROA|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO)$/;
+const NAME_STOP = /^(REPUBLICA|FEDERATIVA|BRASIL|PASSAPORTE|PASSPORT|NACIONAL|SOBRENOME|SURNAME|AUTHORITY|AUTORIDADE|NATURALIDADE|EXPEDICAO|VALIDO|TIPO|PAIS|EMISSOR|SEXO|FILIACAO|GIVEN|NAMES|NOME|DATA|NASCIMENTO|BRASILEIRO|BRASILEIRA|BRASILEIROA|IDENTIDADE|PERSONAL|PLACE|BIRTH|DATE|FOPE|JULIJUL|SRABILEIROA|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC|JANEIRO|FEVEREIRO|MARCO|ABRIL|MAIO|JUNHO|JULHO|AGOSTO|SETEMBRO|OUTUBRO|NOVEMBRO|DEZEMBRO|NACHNAME|VORNAME|PRENOM|COGNOME|PASSEPORT|PASAPORTE)$/;
 
 function isPlausibleNameToken(t) {
-  if (t.length < 3 || NAME_STOP.test(t)) return false;
+  if (t.length < 3 || NAME_STOP.test(t) || isLabelStopWord(t)) return false;
   const vowels = (t.match(/[AEIOU]/g) || []).length;
   if (vowels < 1) return false;
   if (vowels / t.length < 0.2) return false;
@@ -301,12 +301,12 @@ export function parseVIZ(text, mrz) {
     viz.nacionalidadWord = NAT[mrz.nacionalidadCode] || '';
   }
 
-  const surname = afterLabel(u, ['SOBRENOME', 'SURNAME', 'APELLIDOS', 'APELLIDO']);
-  const given = afterLabel(u, ['GIVEN NAMES', 'GIVEN NAME', 'NOMES', 'NOME/', 'NOME ', 'PRENOM', 'NOME\n', 'NOME:']);
+  const surname = afterLabel(u, SURNAME_LABELS);
+  const given = afterLabel(u, GIVEN_LABELS);
   const combined = (surname + ' ' + given).replace(/\s+/g, ' ').trim();
   if (combined.length >= 4 && looksLikeName(combined)) viz.apellidoNombre = combined;
   else {
-    const named = afterLabel(u, ['APELLIDO Y NOMBRE', 'NOME COMPLETO']);
+    const named = afterLabel(u, FULL_NAME_LABELS);
     if (named && looksLikeName(named)) viz.apellidoNombre = named;
   }
   if (!viz.apellidoNombre) {

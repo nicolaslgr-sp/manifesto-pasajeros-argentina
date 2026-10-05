@@ -1,3 +1,5 @@
+import { BIRTH_LABELS } from '../mrz/viz-labels.js';
+
 export function isValidIsoDate(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
   const p = iso.split('-').map(Number);
@@ -112,12 +114,9 @@ export function datesFromViz(text) {
 
 export function dateNearBirthLabel(text) {
   const u = String(text || '').toUpperCase();
-  const labels = [
-    'DATE OF BIRTH', 'FECHA DE NACIMIENTO', 'DATA DE NASCIMENTO',
-    'DATE/PLACE OF BIRTH', 'DATE / PLACE OF BIRTH', 'NASCIMENTO', 'BIRTH'
-  ];
+  const labels = [...BIRTH_LABELS].sort((a, b) => b.length - a.length);
   for (const label of labels) {
-    const idx = u.indexOf(label);
+    const idx = u.indexOf(label.toUpperCase());
     if (idx < 0) continue;
     const dates = datesFromViz(u.slice(idx, idx + 90));
     if (dates.length) return dates[0];
@@ -170,7 +169,7 @@ export function afterLabel(text, labels) {
       const lines = rest.split(/\n+/);
       for (let j = 0; j < Math.min(3, lines.length); j++) {
         const line = lines[j].replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE)/.test(line)) {
+        if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE|NACIONALIDAD|NACHNAME|PRENOM|COGNOME|VORNAME|NOMBRE|NOMBRES)/.test(line)) {
           return line;
         }
       }

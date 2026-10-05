@@ -1,0 +1,83 @@
+/**
+ * Rótulos da zona visual (VIZ) em vários idiomas.
+ * A MRZ (código ICAO de 3 letras) já é universal; estes labels
+ * ensinam o leitor a achar os campos na página impressa.
+ */
+
+/** Sobrenome / apellido */
+export const SURNAME_LABELS = [
+  'SOBRENOME', 'SURNAME', 'APELLIDOS', 'APELLIDO',
+  'NOM DE FAMILLE', 'NOM/', 'COGNOME', 'NACHNAME',
+  'FAMILIENNAME', 'ACHTERNAAM', 'EFTERNAVN', 'EFTERNAMN',
+  'SUKUNIMI', 'NAZWISKO', 'PRIJMENI', 'PREZIME',
+  'SOYADI', 'FAMILY NAME', 'LAST NAME', 'NOM DE FAMILIA',
+  'APELIDO', 'FAMILYNAME'
+];
+
+/** Nome(s) / given names */
+export const GIVEN_LABELS = [
+  'GIVEN NAMES', 'GIVEN NAME', 'GIVENNAMES',
+  'NOMES', 'NOME/', 'NOME ', 'NOME:', 'NOME\n',
+  'PRENOM', 'PRENOMS', 'PRÉNOM', 'PRÉNOMS',
+  'NOMBRES', 'NOMBRE', 'NOME PROPRIO',
+  'VORNAME', 'VORNAMEN', 'VOORNAMEN', 'VOORNAAM',
+  'FORNAVNE', 'FORNAMN', 'ETUNIMET', 'IMIONA', 'JMENA',
+  'FIRST NAME', 'FIRST NAMES', 'FORENAMES', 'FORENAME',
+  'NOME E COGNOME', 'NAMES'
+];
+
+/** Nome completo numa linha */
+export const FULL_NAME_LABELS = [
+  'APELLIDO Y NOMBRE', 'APELLIDOS Y NOMBRES',
+  'NOME COMPLETO', 'FULL NAME', 'NOM COMPLET',
+  'NOMBRE COMPLETO', 'NAME', 'HOLDER'
+];
+
+/** Nacionalidade */
+export const NATIONALITY_LABELS = [
+  'NACIONALIDADE', 'NACIONALIDAD', 'NATIONALITY', 'NATIONALITE',
+  'NATIONALITÉ', 'NAZIONALITA', 'NAZIONALITÀ', 'STAATSANGEHORIGKEIT',
+  'STAATSANGEHÖRIGKEIT', 'NATIONALITEIT', 'NARODOWOSC', 'NÁRODNOST',
+  'UYRUK', 'CITIZENSHIP', 'CITOYENNETE', 'CITOYENNETÉ',
+  'NACIONALITAT', 'KOKUSEKI', '國籍', '国籍'
+];
+
+/** Data de nascimento */
+export const BIRTH_LABELS = [
+  'DATE OF BIRTH', 'DATE/PLACE OF BIRTH', 'DATE / PLACE OF BIRTH',
+  'FECHA DE NACIMIENTO', 'FECHA NACIMIENTO',
+  'DATA DE NASCIMENTO', 'DATA DO NASCIMENTO', 'DATA NASCIMENTO',
+  'DATE DE NAISSANCE', 'GEBURTSDATUM', 'GEBOORTEDATUM',
+  'DATA DI NASCITA', 'FODEDATUM', 'FØDSELSDATO', 'FODDATUM',
+  'SYNTIMAAIKA', 'DATA URODZENIA', 'DATUM NAROZENI',
+  'DOGUM TARIHI', 'BIRTH DATE', 'BIRTHDAY', 'NASCIMENTO', 'BIRTH',
+  'LUGAR Y FECHA DE NACIMIENTO', 'PLACE AND DATE OF BIRTH'
+];
+
+/** Número do passaporte / documento */
+export const PASSPORT_LABELS = [
+  'PASSAPORTE N', 'PASSAPORTE NO', 'PASSAPORTE Nº', 'PASSAPORTE N°',
+  'PASSPORT NO', 'PASSPORT N', 'PASSPORT Nº', 'PASSPORT N°', 'PASSPORT NUMBER',
+  'PASSAPORT N', 'Nº PASSAPORTE', 'NO PASSAPORTE', 'NUMERO DO PASSAPORTE',
+  'NUMERO DE PASAPORTE', 'NÚMERO DE PASAPORTE', 'PASAPORTE N', 'PASAPORTE Nº',
+  'PASSEPORT N', 'PASSEPORT NO', 'NUMERO DE PASSEPORT',
+  'REISEPASS NR', 'PASS NR', 'DOCUMENT NO', 'DOCUMENT NUMBER',
+  'DOC NO', 'NO DE DOCUMENTO', 'Nº DE DOCUMENTO', 'TIPO Y N'
+];
+
+/** Palavras que nunca são nome de pessoa (rótulos / lixo OCR) */
+export const LABEL_STOP_WORDS = [
+  ...SURNAME_LABELS, ...GIVEN_LABELS, ...FULL_NAME_LABELS,
+  ...NATIONALITY_LABELS, ...BIRTH_LABELS, ...PASSPORT_LABELS,
+  'REPUBLICA', 'FEDERATIVA', 'PASSPORT', 'PASSAPORTE', 'PASAPORTE', 'PASSEPORT',
+  'AUTHORITY', 'AUTORIDADE', 'AUTHORITE', 'TYPE', 'TIPO', 'SEX', 'SEXO',
+  'SEXE', 'GESCHLECHT', 'PLACE', 'LUGAR', 'LOCAL', 'OF', 'DE', 'DA', 'DO',
+  'THE', 'AND', 'Y', 'E', 'ET', 'UND', 'VALID', 'VALIDO', 'EXPIRY', 'EXPIRA',
+  'ISSUING', 'EMISSOR', 'PERSONAL', 'NO', 'NR', 'NUMBER', 'NUMERO'
+].map(s => String(s).toUpperCase().replace(/[^A-Z]/g, '')).filter(s => s.length >= 3);
+
+export function isLabelStopWord(token) {
+  const t = String(token || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (!t || t.length < 3) return false;
+  return LABEL_STOP_WORDS.includes(t);
+}
