@@ -6,7 +6,7 @@ import {
 import { natLabel, nationalityFromViz } from '../mrz/nationality.js';
 import {
   SURNAME_LABELS, GIVEN_LABELS, FULL_NAME_LABELS, PASSPORT_LABELS,
-  isLabelStopWord
+  isLabelStopWord, restAfterLabel
 } from '../mrz/viz-labels.js';
 
 function hamming(a, b) {
@@ -32,16 +32,10 @@ function fixPassportOcr(num) {
 }
 
 function passportFromLabel(text) {
-  const u = String(text || '').toUpperCase();
-  const labels = [...PASSPORT_LABELS].sort((a, b) => b.length - a.length);
-  for (const label of labels) {
-    const idx = u.indexOf(label.toUpperCase());
-    if (idx < 0) continue;
-    const rest = u.slice(idx + label.length, idx + label.length + 50);
-    const m = rest.match(/[A-Z0-9]{6,9}/);
-    if (m) return fixPassportOcr(m[0]);
-  }
-  return '';
+  const rest = restAfterLabel(text, PASSPORT_LABELS);
+  if (!rest) return '';
+  const m = rest.slice(0, 60).match(/[A-Z0-9]{6,9}/);
+  return m ? fixPassportOcr(m[0]) : '';
 }
 
 function passportFromNoise(text) {

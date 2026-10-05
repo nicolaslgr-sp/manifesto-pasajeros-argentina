@@ -1,4 +1,4 @@
-import { BIRTH_LABELS } from '../mrz/viz-labels.js';
+import { BIRTH_LABELS, restAfterLabel, normalizeSearch } from '../mrz/viz-labels.js';
 
 export function isValidIsoDate(iso) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return false;
@@ -78,9 +78,19 @@ export function toIsoParts(dd, mm, yyyy) {
 }
 
 export const MONTHS = {
-  JAN: 1, FEB: 2, FEV: 2, MAR: 3, APR: 4, ABR: 4, MAY: 5, MAI: 5,
-  JUN: 6, JUL: 7, AUG: 8, AGO: 8, SEP: 9, SET: 9, OCT: 10, OUT: 10,
-  NOV: 11, DEC: 12, DEZ: 12, DIC: 12, ENE: 1, AVR: 4, AOU: 8
+  // EN / PT / ES / FR / DE / IT / NL / Nordic / PL / common OCR
+  JAN: 1, ENE: 1, GEN: 1, STY: 1,
+  FEB: 2, FEV: 2, FEBR: 2, LUT: 2,
+  MAR: 3, MRT: 3, MARZ: 3,
+  APR: 4, ABR: 4, AVR: 4, APRI: 4, KWI: 4,
+  MAY: 5, MAI: 5, MAG: 5, MAJ: 5, MEI: 5,
+  JUN: 6, GIU: 6, JUIN: 6, CZER: 6,
+  JUL: 7, LUG: 7, JUIL: 7, LIP: 7,
+  AUG: 8, AGO: 8, AOU: 8, AOUT: 8, SIE: 8,
+  SEP: 9, SET: 9, SEPT: 9, WRZ: 9,
+  OCT: 10, OUT: 10, OTT: 10, OKT: 10, PAZ: 10,
+  NOV: 11, LIS: 11,
+  DEC: 12, DEZ: 12, DIC: 12, DES: 12, GRU: 12
 };
 
 export function datesFromViz(text) {
@@ -113,12 +123,18 @@ export function datesFromViz(text) {
 }
 
 export function dateNearBirthLabel(text) {
-  const u = String(text || '').toUpperCase();
-  const labels = [...BIRTH_LABELS].sort((a, b) => b.length - a.length);
-  for (const label of labels) {
-    const idx = u.indexOf(label.toUpperCase());
+  const rest = restAfterLabel(text, BIRTH_LABELS);
+  if (rest) {
+    const dates = datesFromViz(rest.slice(0, 120));
+    if (dates.length) return dates[0];
+  }
+  // fallback: rótulo embutido no bloco
+  const u = normalizeSearch(text);
+  for (const label of [...BIRTH_LABELS].sort((a, b) => b.length - a.length)) {
+    const needle = normalizeSearch(label).trim();
+    const idx = u.indexOf(needle);
     if (idx < 0) continue;
-    const dates = datesFromViz(u.slice(idx, idx + 90));
+    const dates = datesFromViz(u.slice(idx, idx + 100));
     if (dates.length) return dates[0];
   }
   return '';
@@ -126,10 +142,10 @@ export function dateNearBirthLabel(text) {
 
 export function foldKey(s) {
   return String(s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toUpperCase()
-    .replace(/[ÁÀÂÃÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E')
-    .replace(/[ÍÌÎÏ]/g, 'I').replace(/[ÓÒÔÕÖ]/g, 'O')
-    .replace(/[ÚÙÛÜ]/g, 'U').replace(/Ç/g, 'C').replace(/Ñ/g, 'N')
+    .replace(/[Ñ]/g, 'N')
     .replace(/[^A-Z0-9]/g, '');
 }
 
@@ -157,24 +173,16 @@ export function looksLikeName(name) {
 }
 
 export function afterLabel(text, labels) {
-  const u = String(text || '').toUpperCase();
-  for (const label of labels) {
-    let idx = 0;
-    while ((idx = u.indexOf(label, idx)) >= 0) {
-      if (idx > 0 && /[A-ZÁÉÍÓÚ]/.test(u[idx - 1])) {
-        idx += label.length;
-        continue;
-      }
-      const rest = u.slice(idx + label.length).replace(/^[\s:.\-\/]+/, '');
-      const lines = rest.split(/\n+/);
-      for (let j = 0; j < Math.min(3, lines.length); j++) {
-        const line = lines[j].replace(/[^A-Z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-        if (line.length >= 2 && !/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE|NACIONALIDAD|NACHNAME|PRENOM|COGNOME|VORNAME|NOMBRE|NOMBRES)/.test(line)) {
-          return line;
-        }
-      }
-      idx += label.length;
+  const rest = restAfterLabel(text, labels);
+  if (!rest) return '';
+  const lines = rest.split(/\n+/);
+  for (let j = 0; j < Math.min(3, lines.length); j++) {
+    const line = lines[j].replace(/[^A-Z0-9\u0400-\u04FF\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (line.length < 2) continue;
+    if (/^(SURNAME|SOBRENOME|GIVEN|NAMES|NOME|APELLIDO|NATIONALITY|NACIONALIDADE|NACIONALIDAD|NACHNAME|PRENOM|COGNOME|VORNAME|NOMBRE|NOMBRES|FAMILY|FIRST|DATE|FECHA|DATA|PASSPORT|PASSAPORTE)/.test(line)) {
+      continue;
     }
+    return line;
   }
   return '';
 }
